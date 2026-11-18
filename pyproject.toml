@@ -1,0 +1,26 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "mh-dec-mcts"
+version = "0.1.0"
+description = "Hierarchical decentralized MCTS for multi-UAV active sensing and field mapping"
+requires-python = ">=3.10"
+dependencies = ["numpy", "scipy", "pyyaml"]
+
+[project.optional-dependencies]
+dev = ["pytest", "ruff", "pre-commit"]
+plot = ["matplotlib"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/mh_dec_mcts"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["slow: paper-figure reproductions (run locally)"]
+addopts = "-m 'not slow'"
+
+[tool.ruff]
+line-length = 100
+src = ["src"]
