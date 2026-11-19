@@ -1,8 +1,7 @@
+# ground truth: Gaussian or orthomap annotations
 import numpy as np
 
 def gaussian_random_field(r: float, shape: tuple[int, int], rng: np.random.Generator) -> np.ndarray:
-
-# def gaussian_random_field(cluster_radius, n_cell, seed=None):
     """
     Generate a 2D Gaussian random field and cache the results for reuse.
      https://andrewwalker.github.io/statefultransitions/post/gaussian-fields/
@@ -57,3 +56,24 @@ def gaussian_random_field(r: float, shape: tuple[int, int], rng: np.random.Gener
 
     return binary_field
 
+def load_annotations(path: str, shape: tuple[int, int], crop=None) -> np.ndarray:             # labels {2,10}→1, crop, check values ⊆ {0,1}
+    """
+    Load annotations from a .txt file, convert to binary matrix and optionally crop the array.
+    """
+    try:
+        matrix = np.loadtxt(path, dtype=int)
+        matrix[matrix == 10] = 1
+        matrix[matrix == 2] = 1
+        assert matrix.all() in [
+            0,
+            1,
+        ], "Invalid label values found in the annotation file"
+        if crop is not None:
+
+            matrix = matrix[3:113, 13:73]
+        assert (
+            matrix.shape == shape
+        ), "Grid size mismatch with annotation matrix"
+        return matrix
+    except Exception as e:
+        raise ValueError(f"Error reading the file {path}: {e}")
