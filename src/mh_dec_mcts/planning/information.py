@@ -22,7 +22,7 @@ def entropy(p: np.ndarray) -> np.ndarray:
 
     return -v1 * np.log2(v1) - v2 * np.log2(v2)
 
-def information_gain(prior: np.ndarray, s0: float, s1: float) -> np.ndarray:
+def info_gain(prior: np.ndarray, s0: float, s1: float) -> np.ndarray:
     """Compute information gain (paper Eq. 3-8).
     
     Per-cell expected IG = H(m) - H(m|z) for one observation with rates (s0, s1).

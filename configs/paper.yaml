@@ -1,0 +1,15 @@
+# Pierdicca et al. (paper) setup: 50x50 m Gaussian field, 17x17x6 lattice, single UAV.
+name: paper
+seed: 42                      # run i uses seed + i (field, observations, legacy start corner)
+
+grid:    {size_x: 50, size_y: 50, cell: 0.125}
+lattice: {xy_step: null, h_min: null, h_step: null, n_alt: 6, fov_deg: 60}
+#  xy_step null -> min(size_x, size_y) / 16   (legacy rule)
+#  h_step  null -> xy_step / tan(fov / 2)     (footprint grows one step per level)
+#  h_min   null -> h_step
+
+field:   {type: gaussian, r: 5}                 # r = cluster radius
+sensor:  {type: theoretical, a: 1.0, b: 0.015}  # sigma(h) = a (1 - exp(-b h))
+
+agents:  {n: 1, start: paper}                   # paper: lower-left corner | legacy | random
+run:     {planner: ig, weights: equal, steps: 300, runs: 20}

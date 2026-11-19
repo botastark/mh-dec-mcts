@@ -119,9 +119,3 @@ def paper_lattice(grid: Grid, n_alt: int = 6, fov_deg: float = 60.0) -> Lattice:
     xy_step = min(grid.size_x, grid.size_y) / 16
     h_step = xy_step / math.tan(math.radians(fov_deg) / 2)
     return Lattice(grid, xy_step, h_step, h_step, n_alt, fov_deg)
-
-def pick_best(scores: dict[str, float], rng: np.random.Generator, eps: float = 1e-4) -> str:
-    """argmax IG (paper Eq. 9); ties within eps broken uniformly at random (legacy planner.ig_based)."""
-    best = max(scores.values())
-    tied = [a for a in ACTIONS if a in scores and scores[a] >= best - eps]
-    return rng.choice(tied)

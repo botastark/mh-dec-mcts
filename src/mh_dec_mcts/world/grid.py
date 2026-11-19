@@ -67,40 +67,41 @@ class Grid:
         return (0.0, self.rows * self.cell)
 
     # ------------------------------------------------------------ conversions
-    def xy_to_ij_float(self, x: ArrayLike, y: ArrayLike) -> tuple[np.ndarray, np.ndarray]:
-        """Continuous (unrounded) cell coordinates of metric points."""
-        x = np.asarray(x, dtype=float)
-        y = np.asarray(y, dtype=float)
-        if self.centered:
-            ci, cj = self.center_ij
-            return ci - y / self.cell, cj + x / self.cell
-        return self.rows - y / self.cell, x / self.cell
 
-    def xy_to_ij(self, x: ArrayLike, y: ArrayLike):
-        """Metric point(s) -> nearest cell index (i, j). Ints for scalars, int arrays otherwise."""
-        i, j = self.xy_to_ij_float(x, y)
-        i = np.rint(i).astype(int)
-        j = np.rint(j).astype(int)
-        if i.ndim == 0:
-            return int(i), int(j)
-        return i, j
 
-    def ij_to_xy(self, i: ArrayLike, j: ArrayLike):
-        """Cell index (i, j) -> metric point (x, y). Floats for scalars, arrays otherwise.
-
-        Legacy convention: no half-cell offset, so ``ij_to_xy(*xy_to_ij(x, y)) == (x, y)``
-        whenever x and y are whole multiples of ``cell`` (e.g. every lattice waypoint).
+    def ij_to_xy(self, i, j):
         """
-        i = np.asarray(i, dtype=float)
-        j = np.asarray(j, dtype=float)
+        Convert grid indices (i, j) to real-world (x, y) coordinates.
+        """
+
         if self.centered:
             ci, cj = self.center_ij
-            x, y = (j - cj) * self.cell, -(i - ci) * self.cell
+            x = (j - cj) * self.cell
+            y = -(i - ci) * self.cell
         else:
-            x, y = j * self.cell, (self.rows - i) * self.cell
-        if x.ndim == 0:
-            return float(x), float(y)
-        return x, y
+            x = j * self.cell
+            y = (self.rows - i) * self.cell
+        return (x, y)
+
+    def xy_to_ij(self, x, y):
+        """
+        Convert real-world (x, y) coordinates to grid indices (i, j).
+
+        Parameters:
+            x (float): X coordinate.
+            y (float): Y coordinate.
+        Returns:
+            tuple: (i, j) grid indices as integers.
+        """
+        if self.centered:
+            ci, cj = self.center_ij
+            j = x / self.cell + cj
+            i = -y / self.cell + ci
+        else:
+            j = x / self.cell
+            i = self.rows - y / self.cell
+        return int(np.round(i)), int(np.round(j))
+
 
     # ----------------------------------------------------------------- bounds
     def in_bounds(self, i: ArrayLike, j: ArrayLike):
