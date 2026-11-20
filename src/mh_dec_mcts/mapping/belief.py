@@ -84,6 +84,11 @@ def lbp_update(belief: np.ndarray, bounds, psi: np.ndarray) -> None:
 
 
 def update(belief: np.ndarray, bounds, z: np.ndarray, s0: float, s1: float, weights: str) -> None:
-    """One observation: Bayes update, then LBP with the chosen pairwise weights (legacy order)."""
+    """One observation: Bayes update, then LBP with the chosen pairwise weights (legacy order).
+
+    weights="none": Bayes only (Pierdicca's inference_type="OG", used for paper Fig. 3).
+    "equal" gives the same result mathematically, up to floating-point rounding.
+    """
     bayes_update(belief, bounds, z, s0, s1)
-    lbp_update(belief, bounds, pairwise_psi(weights, z))
+    if weights != "none":
+        lbp_update(belief, bounds, pairwise_psi(weights, z))

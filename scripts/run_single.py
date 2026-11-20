@@ -13,7 +13,7 @@ from pathlib import Path
 import numpy as np
 
 from mh_dec_mcts.planning.planners import make_planner
-from mh_dec_mcts.scenario import load_config, make_scenario
+from mh_dec_mcts.scenario import load_config, make_scenario, make_streams
 from mh_dec_mcts.sim.single import METRICS, run_single
 
 
@@ -21,7 +21,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("config")
     ap.add_argument("--planners", nargs="+", default=["ig", "random", "sweep"])
-    ap.add_argument("--weights", choices=["equal", "biased", "adaptive"], help="override run.weights")
+    ap.add_argument("--weights", choices=["none", "equal", "biased", "adaptive"], help="override run.weights")
     ap.add_argument("--r", type=float, help="override field.r (Gaussian cluster radius)")
     ap.add_argument("--runs", type=int, help="override run.runs")
     ap.add_argument("--steps", type=int, help="override run.steps")
@@ -42,16 +42,17 @@ def main():
 
     curves = {p: {m: [] for m in METRICS} for p in args.planners}
     first = {}
-    for i in range(rc["runs"]):
-        for name in args.planners:
-            sc = make_scenario(cfg, run=i)  # fresh rngs per planner: same field and noise stream
-            res = run_single(sc, make_planner(name, sc.lattice, sc.rates), rc["steps"], rc["weights"])
+    for name in args.planners:  # one experiment per planner, as in Pierdicca's code
+        streams = make_streams(cfg)  # None unless compat: pierdicca
+        for i in range(rc["runs"]):
+            sc = make_scenario(cfg, run=i, streams=streams)
+            planner = make_planner(name, sc.lattice, sc.rates, cfg["compat"])
+            res = run_single(sc, planner, rc["steps"], rc["weights"])
             for m in METRICS:
                 curves[name][m].append(getattr(res, m))
             if i == 0:
                 first[name] = (sc, res)
-        print(f"run {i + 1}/{rc['runs']}: " + ", ".join(
-            f"{p} MSE {curves[p]['mse'][-1][-1]:.4f}" for p in args.planners))
+            print(f"{name} run {i + 1}/{rc['runs']}: MSE {res.mse[-1]:.5f}, altitude {res.altitude[-1]:.2f}")
 
     summary = {p: {m: {"mean": np.mean(curves[p][m], 0).tolist(), "std": np.std(curves[p][m], 0).tolist()}
                    for m in METRICS} for p in args.planners}

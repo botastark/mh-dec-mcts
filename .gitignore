@@ -225,7 +225,7 @@ __marimo__/
 
 
 # Experiment results kept locally for now
-results/
+# results/
 experiments/
 *.png
 !docs/**/*.png

@@ -1,0 +1,11 @@
+# Paper Fig. 3 exactly as Pierdicca ran it (Precision-Agriculture-Dev, experiments.OG_N1).
+name: pierdicca_fig3
+compat: pierdicca                 # his random streams, exact-tie IG, his sweep pattern
+pierdicca: {map_seed: 123, agent_seed: 0}
+
+grid:    {size_x: 50, size_y: 50, cell: 0.125}
+lattice: {xy_step: null, h_min: null, h_step: null, n_alt: 6, fov_deg: 60}
+field:   {type: gaussian, r: 5}
+sensor:  {type: theoretical, a: 1.0, b: 0.015}
+agents:  {n: 1, start: paper}     # x = y = "BL", altitude 0
+run:     {planner: ig, weights: none, steps: 300, runs: 20}   # inference_type "OG": Bayes only
