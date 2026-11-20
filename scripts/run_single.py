@@ -13,7 +13,7 @@ from pathlib import Path
 import numpy as np
 
 from mh_dec_mcts.planning.planners import make_planner
-from mh_dec_mcts.scenario import load_config, make_scenario, make_streams
+from mh_dec_mcts.scenario import load_config, make_scenario, make_streams, mapping_weights
 from mh_dec_mcts.sim.single import METRICS, run_single
 
 
@@ -47,7 +47,7 @@ def main():
         for i in range(rc["runs"]):
             sc = make_scenario(cfg, run=i, streams=streams)
             planner = make_planner(name, sc.lattice, sc.rates, cfg["compat"])
-            res = run_single(sc, planner, rc["steps"], rc["weights"])
+            res = run_single(sc, planner, rc["steps"], mapping_weights(cfg))
             for m in METRICS:
                 curves[name][m].append(getattr(res, m))
             if i == 0:

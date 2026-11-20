@@ -1,0 +1,12 @@
+# Paper Fig. 4 as Pierdicca ran it: IG, N = 1, random start waypoint at the lowest altitude,
+# 20 runs x 100 steps. Vary with --weights {equal,biased,adaptive} and --r {0..5}.
+name: pierdicca_fig4
+compat: pierdicca
+pierdicca: {map_seed: 123, agent_seed: 0, position_seed: 12}
+
+grid:    {size_x: 50, size_y: 50, cell: 0.125}
+lattice: {xy_step: null, h_min: null, h_step: null, n_alt: 6, fov_deg: 60}
+field:   {type: gaussian, r: 5}
+sensor:  {type: theoretical, a: 1.0, b: 0.015}
+agents:  {n: 1, start: random}    # his reset_agents_position without x / y
+run:     {planner: ig, weights: adaptive, steps: 100, runs: 20}

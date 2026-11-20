@@ -42,6 +42,24 @@ def adaptive_psi(z: np.ndarray) -> np.ndarray:
     return np.array([[w, 1 - w], [1 - w, w]])
 
 
+def adaptive_psi_pierdicca(z: np.ndarray) -> np.ndarray:
+    """Pierdicca's Mapper.set_pairwise_potential_z, reproduced exactly (compat mode).
+
+    Differs from adaptive_psi in one detail of his code: the 3x3 windows are built with
+    reshape(max(rows//3, cols//3), 3, -1, 3), which scrambles them when the (clipped)
+    observation is wider than tall. np.corrcoef without guards, as in his code.
+    """
+    pr, pc = (-z.shape[0]) % 3, (-z.shape[1]) % 3
+    o = np.pad(z, ((0, pr), (0, pc)), mode="edge") if pr or pc else z
+    v = (o.reshape((max(o.shape[0] // 3, o.shape[1] // 3), 3, -1, 3)).swapaxes(1, 2)
+         .reshape((o.shape[0] // 3) * (o.shape[1] // 3), 3, 3))
+    centre = v[:, 1, 1]
+    n_occ = np.count_nonzero(np.stack([v[:, 0, 1], v[:, 1, 2], v[:, 2, 1], v[:, 1, 0]], axis=1), axis=1)
+    rho = np.corrcoef(centre, n_occ)[0, 1]
+    w = 1 / (1 + np.exp(-rho))
+    return np.array([[w, 1 - w], [1 - w, w]])
+
+
 def pairwise_psi(kind: str, z: np.ndarray) -> np.ndarray:
     if kind == "equal":
         return PSI_EQUAL
@@ -49,6 +67,8 @@ def pairwise_psi(kind: str, z: np.ndarray) -> np.ndarray:
         return PSI_BIASED
     if kind == "adaptive":
         return adaptive_psi(z)
+    if kind == "adaptive_pierdicca":
+        return adaptive_psi_pierdicca(z)
     raise ValueError(f"unknown pairwise weights '{kind}'")
 
 

@@ -27,14 +27,13 @@ import yaml
 
 from mh_dec_mcts.sensing.lattice import Lattice, Pose, start_poses
 from mh_dec_mcts.sensing.sensor import Predictions, SensorRates, load_predictions, observe, observe_pred, theoretical_rates
-from mh_dec_mcts.world.fields import load_annotations
-from mh_dec_mcts.world.fields import gaussian_random_field
+from mh_dec_mcts.world.fields import load_annotations, gaussian_random_field
 from mh_dec_mcts.world.grid import Grid
 
 DEFAULTS = {
     "seed": 42,
     "compat": None,  # None | "pierdicca"
-    "pierdicca": {"map_seed": 123, "agent_seed": 0},
+    "pierdicca": {"map_seed": 123, "agent_seed": 0, "position_seed": 12},
     "lattice": {"xy_step": None, "h_min": None, "h_step": None, "n_alt": 6, "fov_deg": 60},
     "sensor": {"type": "theoretical", "a": 1.0, "b": 0.015},
     "agents": {"n": 1, "start": "paper"},
@@ -106,7 +105,7 @@ def make_streams(cfg: dict) -> dict | None:
         return None
     p = cfg["pierdicca"]
     return {"map": np.random.default_rng(p["map_seed"]), "agent": np.random.default_rng(p["agent_seed"]),
-            "next_run": 0}
+            "position": np.random.default_rng(p["position_seed"]), "next_run": 0}
 
 
 def make_scenario(cfg: dict, run: int = 0, streams: dict | None = None) -> Scenario:
@@ -116,10 +115,13 @@ def make_scenario(cfg: dict, run: int = 0, streams: dict | None = None) -> Scena
     lat = make_lattice(grid, cfg["lattice"])
     pierdicca = cfg["compat"] == "pierdicca"
     if pierdicca:
-        if streams is None:  # standalone call: fast-forward the field generator to this run
+        if streams is None:  # standalone call: fast-forward field and start generators to this run
             streams = make_streams(cfg)
             for _ in range(run):
                 streams["map"].normal(size=grid.shape)
+                if cfg["agents"]["start"] == "random":
+                    for _ in range(cfg["agents"]["n"]):
+                        streams["position"].choice(lat.nx), streams["position"].choice(lat.ny)
             streams["next_run"] = run
         if streams["next_run"] != run:
             raise ValueError(f"compat pierdicca: runs must be built in order (expected {streams['next_run']}, got {run})")
@@ -151,7 +153,11 @@ def make_scenario(cfg: dict, run: int = 0, streams: dict | None = None) -> Scena
 
     # start poses
     a = cfg["agents"]
-    starts = make_starts(lat, a["n"], a["start"], np.random.default_rng(run_seed))
+    if pierdicca and a["start"] == "random":  # his reset_agents_position: x then y per agent, seed 12
+        pr = streams["position"]
+        starts = [Pose(int(pr.choice(np.arange(lat.nx))), int(pr.choice(np.arange(lat.ny))), 0) for _ in range(a["n"])]
+    else:
+        starts = make_starts(lat, a["n"], a["start"], np.random.default_rng(run_seed))
 
     if pierdicca:  # one agent generator for noise and decisions, carried across runs
         obs_rng = plan_rng = streams["agent"]
@@ -162,6 +168,13 @@ def make_scenario(cfg: dict, run: int = 0, streams: dict | None = None) -> Scena
         name=cfg["name"], run_seed=run_seed, grid=grid, lattice=lat, truth=truth,
         rates=rates, preds=preds, starts=starts, obs_rng=obs_rng, plan_rng=plan_rng,
     )
+
+
+def mapping_weights(cfg: dict) -> str:
+    """run.weights as the mapper should use it (compat pierdicca: his adaptive-weight variant)."""
+    cfg = with_defaults(cfg)
+    w = cfg["run"]["weights"]
+    return "adaptive_pierdicca" if cfg["compat"] == "pierdicca" and w == "adaptive" else w
 
 
 def make_starts(lat: Lattice, n: int, mode: str, rng: np.random.Generator) -> list[Pose]:
