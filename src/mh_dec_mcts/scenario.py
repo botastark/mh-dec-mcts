@@ -33,10 +33,11 @@ from mh_dec_mcts.world.grid import Grid
 DEFAULTS = {
     "seed": 42,
     "compat": None,  # None | "pierdicca"
-    "pierdicca": {"map_seed": 123, "agent_seed": 0, "position_seed": 12},
+    "pierdicca": {"map_seed": 123, "agent_seed": 0, "position_seed": 12, "order_seed": 17},
     "lattice": {"xy_step": None, "h_min": None, "h_step": None, "n_alt": 6, "fov_deg": 60},
     "sensor": {"type": "theoretical", "a": 1.0, "b": 0.015},
     "agents": {"n": 1, "start": "paper"},
+    "comms": {"range": None, "sharing": "none"},  # range in waypoint steps (None = unlimited); none | BS | BM
     "run": {"planner": "ig", "weights": "equal", "steps": 100, "runs": 20},
 }
 
@@ -51,15 +52,24 @@ class Scenario:
     rates: SensorRates  # what the belief update assumes, per altitude level
     preds: Predictions | None  # classifier maps (sensor type "predictions") or None
     starts: list[Pose]  # one per agent
-    obs_rng: np.random.Generator
-    plan_rng: np.random.Generator
+    obs_rngs: list[np.random.Generator]  # per agent: sensor noise
+    plan_rngs: list[np.random.Generator]  # per agent: tie-breaks, Random, Sweep direction
+    order_rng: np.random.Generator  # multi-agent decision order (IGd)
 
-    def observe(self, pose: Pose) -> np.ndarray:
+    @property
+    def obs_rng(self) -> np.random.Generator:  # single agent
+        return self.obs_rngs[0]
+
+    @property
+    def plan_rng(self) -> np.random.Generator:
+        return self.plan_rngs[0]
+
+    def observe(self, pose: Pose, agent: int = 0) -> np.ndarray:
         """What the UAV sees from pose: classifier prediction or truth with synthetic noise."""
         b = self.lattice.footprint(pose)
         if self.preds is not None:
             return observe_pred(self.preds.maps, pose.k, b)
-        return observe(self.truth, b, *self.rates.at(pose.k), self.obs_rng)
+        return observe(self.truth, b, *self.rates.at(pose.k), self.obs_rngs[agent])
 
 
 # ------------------------------------------------------------------ config
@@ -104,8 +114,11 @@ def make_streams(cfg: dict) -> dict | None:
     if cfg["compat"] != "pierdicca":
         return None
     p = cfg["pierdicca"]
-    return {"map": np.random.default_rng(p["map_seed"]), "agent": np.random.default_rng(p["agent_seed"]),
-            "position": np.random.default_rng(p["position_seed"]), "next_run": 0}
+    return {"map": np.random.default_rng(p["map_seed"]),
+            # his Agent(..., seed=0): every agent has its own generator, all with the same seed
+            "agents": [np.random.default_rng(p["agent_seed"]) for _ in range(cfg["agents"]["n"])],
+            "position": np.random.default_rng(p["position_seed"]),
+            "order": np.random.default_rng(p["order_seed"]), "next_run": 0}
 
 
 def make_scenario(cfg: dict, run: int = 0, streams: dict | None = None) -> Scenario:
@@ -159,14 +172,18 @@ def make_scenario(cfg: dict, run: int = 0, streams: dict | None = None) -> Scena
     else:
         starts = make_starts(lat, a["n"], a["start"], np.random.default_rng(run_seed))
 
-    if pierdicca:  # one agent generator for noise and decisions, carried across runs
-        obs_rng = plan_rng = streams["agent"]
+    n = a["n"]
+    if pierdicca:  # per agent: one generator for noise and decisions, carried across runs
+        obs_rngs = plan_rngs = streams["agents"]
+        order_rng = streams["order"]
     else:
-        obs_rng = np.random.default_rng(run_seed)  # legacy: Field.rng reset to the run seed
-        plan_rng = np.random.default_rng([run_seed, 1])  # independent of the observation draws
+        # agent 0 keeps the legacy single-agent seeding (Field.rng reset to the run seed)
+        obs_rngs = [np.random.default_rng(run_seed if i == 0 else [run_seed, 2, i]) for i in range(n)]
+        plan_rngs = [np.random.default_rng([run_seed, 1] if i == 0 else [run_seed, 3, i]) for i in range(n)]
+        order_rng = np.random.default_rng([run_seed, 4])
     return Scenario(
-        name=cfg["name"], run_seed=run_seed, grid=grid, lattice=lat, truth=truth,
-        rates=rates, preds=preds, starts=starts, obs_rng=obs_rng, plan_rng=plan_rng,
+        name=cfg["name"], run_seed=run_seed, grid=grid, lattice=lat, truth=truth, rates=rates, preds=preds,
+        starts=starts, obs_rngs=obs_rngs, plan_rngs=plan_rngs, order_rng=order_rng,
     )
 
 

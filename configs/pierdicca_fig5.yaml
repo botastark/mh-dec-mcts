@@ -1,0 +1,14 @@
+# Paper Fig. 5 as Pierdicca ran it: N UAVs at random start waypoints (lowest altitude),
+# adaptive weights, r = 5, 20 runs x 100 steps. scripts/run_multi.py loops over
+# planner {ig, igd} x sharing {none, BS, BM} x range {5, 16} x N {1, 2, 4, 8}.
+name: pierdicca_fig5
+compat: pierdicca
+pierdicca: {map_seed: 123, agent_seed: 0, position_seed: 12, order_seed: 17}
+
+grid:    {size_x: 50, size_y: 50, cell: 0.125}
+lattice: {xy_step: null, h_min: null, h_step: null, n_alt: 6, fov_deg: 60}
+field:   {type: gaussian, r: 5}
+sensor:  {type: theoretical, a: 1.0, b: 0.015}
+agents:  {n: 2, start: random}
+comms:   {range: 5, sharing: none}  # range in lattice steps (his radius_multiplier); 16 = whole field
+run:     {planner: ig, weights: adaptive, steps: 100, runs: 20}
