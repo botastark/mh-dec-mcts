@@ -54,6 +54,7 @@ class DecMCTSConfig:
     reward_discount: float = 1.0  # weight of the t-th footprint along a sequence
     stride: int = 8  # plan on every stride-th cell (objective.PlanGrid)
     drop: float = 0.0  # probability that a message is lost
+    lbp_model: bool = False  # planner's belief update: Bayes only, as greedy IG (False) or + LBP model
     share_plans: bool = True  # False: no plan exchange, every agent plans alone (ablation)
     variant: str = "distribution"  # distribution: Best et al. 2019 (X_hat + q, Alg. 3, argmax q)
     #                                single: MH-MCTS paper's simplification, one intent = the tree's
@@ -154,7 +155,8 @@ class DecMCTS:
     def __init__(self, lat: Lattice, rates: SensorRates, cfg: DecMCTSConfig | None = None, seed=0,
                  psi=None):
         """psi: per-level LBP weight of the mapper (objective.lbp_psi); None = Bayes only."""
-        self.lat, self.rates, self.cfg, self.psi = lat, rates, cfg or DecMCTSConfig(), psi
+        self.lat, self.rates, self.cfg = lat, rates, cfg or DecMCTSConfig()
+        self.psi = psi if self.cfg.lbp_model else None
         self.rng = np.random.default_rng(seed)
         self.comm_rng = np.random.default_rng(self.rng.integers(2**62))  # message loss only
         self.last_q: list[tuple[list[Seq], np.ndarray]] = []  # per agent, for inspection

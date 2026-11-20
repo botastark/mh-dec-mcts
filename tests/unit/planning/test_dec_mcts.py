@@ -217,3 +217,10 @@ def test_single_intent_variant():
         assert sc.lattice.move(sc.starts[r], acts[r]) == seqs[0][0]
     with pytest.raises(ValueError):
         DecMCTS(sc.lattice, sc.rates, DecMCTSConfig(variant="x")).plan(beliefs, sc.starts, [[1], [0]])
+
+
+def test_lbp_model_off_plans_with_bayes_only():
+    sc = scen(1)
+    dm = make_dec_mcts({**CFG, "mcts": {**CFG["mcts"], "lbp_model": False}}, sc)
+    assert dm.psi is None
+    assert make_dec_mcts(CFG, sc).psi is not None

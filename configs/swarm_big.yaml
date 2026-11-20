@@ -1,0 +1,42 @@
+# swarm_rect.yaml on a 4x larger field: 200 m x 100 m (800 x 1600 cells), same lattice spacing
+# (65 x 33 waypoints x 6 altitudes), same 4 UAVs from the corners and 100 steps. Far more ground
+# per UAV than one footprint or an 8-step plan can reach. Everything else as swarm_rect.yaml.
+#   python scripts/myopia.py configs/swarm_big.yaml --setting IGd_BM_R5 --runs 8 --jobs 8 \
+#       --planners greedy decmcts:horizon=2 decmcts:horizon=8,rollout=greedy decmcts:horizon=16,rollout=greedy
+name: swarm_big
+seed: 42
+compat: null
+
+grid:    {size_x: 100, size_y: 50, cell: 0.125}  # 800 rows x 1600 cols
+lattice: {xy_step: 3.125, h_min: null, h_step: null, n_alt: 6, fov_deg: 60}
+field:   {type: gaussian, r: 5, ref: 50.0}   # clusters sized as on the 50 x 50 m paper field
+sensor:  {type: theoretical, a: 1.0, b: 0.015}
+agents:  {n: 4, start: legacy}        # legacy corner order, as swarm.yaml
+run:     {weights: adaptive, steps: 100, runs: 20}
+
+settings:                             # an optional `mcts: {...}` per setting overrides the section below
+  IG_BS_Rinf: {range: 64, sharing: BS, greedy: ig}    # 64 waypoints = whole field
+  IGd_BM_R5:  {range: 5,  sharing: BM, greedy: igd}
+
+planners: [greedy, decmcts]
+
+mcts:                    # planning/dec_mcts.py DecMCTSConfig; per-setting `mcts:` above overrides
+  variant: single        # single: one intent per UAV (MH-MCTS paper) | distribution: 10 plans + q (Best et al.)
+  horizon: 8             # actions per planned sequence (3.125 m or 5.4 m each)
+  iterations: 10         # rounds per time step; each round: rollouts, then plans sent to neighbours
+  rollouts: 10           # tree expansions per round -> iterations x rollouts simulated plans per UAV per step
+  gamma: 0.99            # D-UCT discount: older rollouts count gamma^age (teammates' plans keep changing)
+  cp: 0.5                # exploration constant of the tree's upper confidence bound
+  rollout: greedy        # how a sequence is completed below the tree: random | greedy (best expected IG)
+  reward_discount: 1.0   # weight of the t-th look in a sequence: reward_discount^t
+  stride: 8              # planner works on every 8th cell (1 m); cheaper, footprints still aligned
+  lbp_model: false       # planner's map model: Bayes only, as greedy IG | true: + LBP model
+  drop: 0.0              # probability a plan message is lost
+  share_plans: true      # false: no plan exchange at all (ablation)
+  # only for variant distribution:
+  n_seq: 10              # plans per UAV in its shared set X_hat
+  resample_every: 10     # rounds between re-selecting X_hat from the tree
+  n_samples: 3           # teammate plans / worlds sampled per q update
+  alpha: 0.1             # step size of the q update (Alg. 3)
+  beta0: 0.1             # temperature of the q update, lowered by `cool` each round
+  cool: 0.8

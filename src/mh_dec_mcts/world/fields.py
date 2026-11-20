@@ -1,7 +1,8 @@
 # ground truth: Gaussian or orthomap annotations
 import numpy as np
 
-def gaussian_random_field(r: float, shape: tuple[int, int], rng: np.random.Generator) -> np.ndarray:
+def gaussian_random_field(r: float, shape: tuple[int, int], rng: np.random.Generator,
+                          ref_cells: int | None = None) -> np.ndarray:
     """
     Generate a 2D Gaussian random field and cache the results for reuse.
      https://andrewwalker.github.io/statefultransitions/post/gaussian-fields/
@@ -26,15 +27,18 @@ def gaussian_random_field(r: float, shape: tuple[int, int], rng: np.random.Gener
         b = [-i for i in b]
         return a + b
 
-    # same unit on both axes (cycles per max side): round clusters on rectangles, x1.0 if square
-    n = max(n_cell_x, n_cell_y)
+    # wavenumbers in cycles per `ref_cells` cells on both axes (round clusters on rectangles).
+    # ref_cells = None: the longest side (cluster size grows with the field). Waves longer than
+    # ref_cells (k < 1) get the k = 1 amplitude, so clusters keep the same physical size on any
+    # field. Square field with ref_cells = its side: exactly the original.
+    n = ref_cells or max(n_cell_x, n_cell_y)
     sx, sy = n / n_cell_x, n / n_cell_y
 
     def _pk2(kx, ky):
         if kx == 0 and ky == 0:
             return 0.0
         kx, ky = kx * sx, ky * sy
-        val = np.sqrt(np.sqrt(kx**2 + ky**2) ** (-r))
+        val = np.sqrt(max(1.0, np.sqrt(kx**2 + ky**2)) ** (-r))
         return val
 
     # Generate amplitude for the given cluster_radius

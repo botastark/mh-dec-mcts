@@ -51,14 +51,16 @@ def main():
     ap.add_argument("--setting", default="IGd_BM_R5")
     ap.add_argument("--param", nargs="+", action="append", default=[], metavar=("NAME", "VALUES"),
                     help="parameter name then values, e.g. --param gamma 0.99 0.999")
-    ap.add_argument("--runs", type=int, default=8)
-    ap.add_argument("--steps", type=int, default=50)
+    ap.add_argument("--runs", type=int, help="default: the config's run.runs")
+    ap.add_argument("--steps", type=int, help="default: the config's run.steps")
     ap.add_argument("--seed", type=int, default=1000)
     ap.add_argument("--jobs", type=int, default=os.cpu_count())
     ap.add_argument("--out", default="results/tune")
     args = ap.parse_args()
 
     cfg = load_config(args.config, seed=args.seed)
+    args.steps = args.steps or cfg["run"]["steps"]
+    args.runs = args.runs or cfg["run"]["runs"]
     if cfg["compat"] is not None:
         raise SystemExit("tune with compat: null (paired per-run seeding)")
     setting = cfg["settings"][args.setting]

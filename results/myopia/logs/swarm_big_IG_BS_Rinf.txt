@@ -1,0 +1,13 @@
+swarm_big IG_BS_Rinf: 20 runs x 100 steps (mean +- s.e.; nan = never reached)
+                             planner  steps to 80% cov   to 95%    backfill %   avg MSE         vs greedy (paired)  final MSE mean alt       dwell  trapped
+                              greedy        17 +-   0     21     3.1 +- 0.4    0.0413 +0.0000 +- 0.0000 ( +0.0%)    0.00013    21.6m  13.6 +- 0.6   0/20
+                   decmcts:horizon=2        17 +-   0     20     2.5 +- 0.3    0.0424 +0.0011 +- 0.0004 ( +2.6%)    0.00043    21.5m  19.6 +- 0.9   8/20
+    decmcts:horizon=8,rollout=greedy        16 +-   0     18     2.2 +- 0.2    0.0408 -0.0006 +- 0.0003 ( -1.4%)    0.00019    20.7m  14.7 +- 0.8   4/20
+   decmcts:horizon=16,rollout=greedy        18 +-   0     24     1.5 +- 0.4    0.0447 +0.0034 +- 0.0005 ( +8.1%)    0.00036    19.4m  25.8 +- 1.2  18/20
+
+                                team        overlap   connectivity   misalignment      balance
+                              greedy   0.295 +-0.025   1.000 +-0.000   0.000 +-0.000  0.12 +-0.01
+                   decmcts:horizon=2   0.197 +-0.015   1.000 +-0.000   0.000 +-0.000  0.11 +-0.01
+    decmcts:horizon=8,rollout=greedy   0.120 +-0.012   1.000 +-0.000   0.000 +-0.000  0.04 +-0.00
+   decmcts:horizon=16,rollout=greedy   0.074 +-0.007   1.000 +-0.000   0.000 +-0.000  0.09 +-0.01
+-> results/myopia/swarm_big_IG_BS_Rinf
