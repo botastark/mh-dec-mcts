@@ -13,7 +13,7 @@ lattice: {xy_step: 3.125, h_min: null, h_step: null, n_alt: 6, fov_deg: 60}
 field:   {type: gaussian, r: 5}
 sensor:  {type: theoretical, a: 1.0, b: 0.015}
 agents:  {n: 4, start: legacy}        # legacy corner order, as swarm.yaml
-run:     {weights: adaptive, steps: 150, runs: 20}   # 2x the area: 150 steps
+run:     {weights: adaptive, steps: 100, runs: 20}   # 2x the area: 150 steps
 
 settings:                             # optional `mcts:` per setting overrides the section below
   IG_BS_Rinf: {range: 32, sharing: BS, greedy: ig, mcts: {horizon: 2}}    # 32 waypoints = whole field
