@@ -22,13 +22,18 @@ def gaussian_random_field(r: float, shape: tuple[int, int], rng: np.random.Gener
     # Helper functions
     def _fft_indices(n):
         a = list(range(0, int(np.floor(n / 2)) + 1))
-        b = reversed(range(1, int(np.floor(n / 2))))
+        b = reversed(range(1, (n + 1) // 2))  # was floor(n / 2): one index short for odd n
         b = [-i for i in b]
         return a + b
+
+    # same unit on both axes (cycles per max side): round clusters on rectangles, x1.0 if square
+    n = max(n_cell_x, n_cell_y)
+    sx, sy = n / n_cell_x, n / n_cell_y
 
     def _pk2(kx, ky):
         if kx == 0 and ky == 0:
             return 0.0
+        kx, ky = kx * sx, ky * sy
         val = np.sqrt(np.sqrt(kx**2 + ky**2) ** (-r))
         return val
 

@@ -1,0 +1,32 @@
+# Dec-MCTS (Best et al. 2019) on the Fig. 5 field / lattice / sensor, with our own (correct)
+# adaptive weights and seeding: compat null, so no Pierdicca quirks (adaptive_pierdicca etc.).
+#   python scripts/run_single.py configs/decmcts.yaml --planners ig decmcts           # N = 1
+#   python scripts/run_multi.py  configs/decmcts.yaml --planners igd decmcts --sharing none
+name: decmcts
+seed: 42           # run i: field, start and sensor noise from seed + i, same for every planner
+compat: null
+
+grid:    {size_x: 50, size_y: 50, cell: 0.125}
+lattice: {xy_step: null, h_min: null, h_step: null, n_alt: 6, fov_deg: 60}
+field:   {type: gaussian, r: 5}
+sensor:  {type: theoretical, a: 1.0, b: 0.015}
+agents:  {n: 2, start: random}
+comms:   {range: 5, sharing: none}
+run:     {planner: decmcts, weights: adaptive, steps: 100, runs: 20}
+
+# planning/dec_mcts.py DecMCTSConfig; anything left out keeps its default
+mcts:
+  horizon: 6          # actions per planned sequence
+  iterations: 30      # Alg. 1 rounds per time step
+  rollouts: 10        # D-UCT rollouts per round (paper: 10)
+  n_seq: 10           # |X_hat| sequences shared per agent (paper: 10)
+  resample_every: 10  # rounds between X_hat re-selections (paper: 10)
+  n_samples: 3        # teammate-plan / world samples for the Alg. 3 expectations
+  gamma: 0.95         # D-UCT discount
+  cp: 0.5             # exploration constant (> 1/sqrt(8))
+  alpha: 0.1          # Alg. 3 step size
+  beta0: 0.1          # Alg. 3 temperature, cooled by `cool` each round
+  cool: 0.8
+  rollout: random     # random | greedy
+  stride: 8           # plan on every 8th cell (1 m)
+  drop: 0.0           # message loss probability

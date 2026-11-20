@@ -4,6 +4,7 @@
     python scripts/run_single.py configs/paper.yaml --planners ig --weights adaptive --r 2
     python scripts/run_single.py configs/paper.yaml --runs 2 --steps 30      # quick
     python scripts/run_single.py configs/wheat.yaml --planners ig sweep
+    python scripts/run_single.py configs/decmcts.yaml --planners ig decmcts      # MCTS, one UAV
 """
 
 import argparse
@@ -12,6 +13,7 @@ from pathlib import Path
 
 import numpy as np
 
+from mh_dec_mcts.planning.dec_mcts import make_dec_mcts
 from mh_dec_mcts.planning.planners import make_planner
 from mh_dec_mcts.scenario import load_config, make_scenario, make_streams, mapping_weights
 from mh_dec_mcts.sim.single import METRICS, run_single
@@ -46,7 +48,8 @@ def main():
         streams = make_streams(cfg)  # None unless compat: pierdicca
         for i in range(rc["runs"]):
             sc = make_scenario(cfg, run=i, streams=streams)
-            planner = make_planner(name, sc.lattice, sc.rates, cfg["compat"])
+            planner = (make_dec_mcts(cfg, sc) if name == "decmcts"
+                       else make_planner(name, sc.lattice, sc.rates, cfg["compat"]))
             res = run_single(sc, planner, rc["steps"], mapping_weights(cfg))
             for m in METRICS:
                 curves[name][m].append(getattr(res, m))

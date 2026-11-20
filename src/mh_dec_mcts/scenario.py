@@ -39,6 +39,7 @@ DEFAULTS = {
     "agents": {"n": 1, "start": "paper"},
     "comms": {"range": None, "sharing": "none"},  # range in waypoint steps (None = unlimited); none | BS | BM
     "run": {"planner": "ig", "weights": "equal", "steps": 100, "runs": 20},
+    "mcts": {},  # DecMCTSConfig overrides for planner "decmcts" (planning/dec_mcts.py)
 }
 
 
@@ -185,6 +186,15 @@ def make_scenario(cfg: dict, run: int = 0, streams: dict | None = None) -> Scena
         name=cfg["name"], run_seed=run_seed, grid=grid, lattice=lat, truth=truth, rates=rates, preds=preds,
         starts=starts, obs_rngs=obs_rngs, plan_rngs=plan_rngs, order_rng=order_rng,
     )
+
+
+def calibration_field(cfg: dict, grid: Grid) -> np.ndarray:
+    """A field like the scenario's for calibrating planner models: a fresh Gaussian field with
+    the same r (fixed seed, never one of the evaluated fields), or the annotated map itself."""
+    f = with_defaults(cfg)["field"]
+    if f["type"] == "gaussian":
+        return gaussian_random_field(f["r"], grid.shape, np.random.default_rng([999, 999]))
+    return load_annotations(f["annotations"], f.get("crop"), tuple(f.get("positive_labels", (1, 2, 10))))
 
 
 def mapping_weights(cfg: dict) -> str:

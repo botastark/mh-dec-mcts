@@ -2,8 +2,9 @@
 
 Per step:
     1. metrics: per-agent entropy / MSE / altitude, misalignment between agents
-    2. plan: IG (each agent greedy on its own belief) or IGd (IG discounted by overlap, agents
-       deciding one after another in a random order)
+    2. plan: IG (each agent greedy on its own belief), IGd (IG discounted by overlap, agents
+       deciding one after another in a random order) or Dec-MCTS (planning/dec_mcts.py; plans
+       are exchanged with the neighbours at the current poses)
     3. move all agents
     4. each agent observes; neighbours are found at the new positions
     5. each agent updates its own belief (Bayes + LBP with its own pairwise weights)
@@ -17,6 +18,7 @@ import numpy as np
 from mh_dec_mcts.comms.network import neighbours
 from mh_dec_mcts.comms.news import News
 from mh_dec_mcts.mapping.belief import bayes_update, lbp_update, pairwise_psi
+from mh_dec_mcts.planning.dec_mcts import DecMCTS
 from mh_dec_mcts.planning.information import entropy
 from mh_dec_mcts.planning.planners import GreedyIG, pick_best
 from mh_dec_mcts.scenario import Scenario
@@ -68,8 +70,11 @@ def choose_actions(sc: Scenario, planner: str, beliefs, poses, range_, tie_eps: 
 
 
 def run_multi(sc: Scenario, planner: str, n_steps: int, weights: str = "adaptive", sharing: str = "none",
-              range_: int | None = None, tie_eps: float = 1e-4) -> MultiResult:
+              range_: int | None = None, tie_eps: float = 1e-4, dec: DecMCTS | None = None) -> MultiResult:
+    """planner "decmcts" needs dec = planning.dec_mcts.make_dec_mcts(cfg, sc)."""
     lat, n = sc.lattice, len(sc.starts)
+    if (planner == "decmcts") != (dec is not None):
+        raise ValueError("planner 'decmcts' needs dec=make_dec_mcts(cfg, sc), and only it")
     beliefs = [np.full(sc.grid.shape, 0.5) for _ in range(n)]
     news = News(sharing, n, sc.grid.shape)
     poses = list(sc.starts)
@@ -81,7 +86,10 @@ def run_multi(sc: Scenario, planner: str, n_steps: int, weights: str = "adaptive
         res.altitude.append([lat.xyz(p)[2] for p in poses])
         res.misalignment.append(float(np.var(np.stack(beliefs, axis=2), axis=2).mean()))
         # 2. plan, 3. move
-        actions = choose_actions(sc, planner, beliefs, poses, range_, tie_eps)
+        if dec is not None:
+            actions = dec.plan(beliefs, poses, neighbours(poses, range_))
+        else:
+            actions = choose_actions(sc, planner, beliefs, poses, range_, tie_eps)
         poses = [lat.move(p, a) for p, a in zip(poses, actions)]
         if any(p is None for p in poses):
             raise RuntimeError(f"inadmissible action in {actions}")

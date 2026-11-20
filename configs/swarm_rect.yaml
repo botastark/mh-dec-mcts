@@ -1,0 +1,29 @@
+# swarm.yaml on a non-square field: everything the same (4 UAVs from the corners, adaptive weights,
+# r = 5, the two settings, Dec-MCTS settings) except the field, 100 m x 50 m instead of 50 x 50.
+# Same lattice spacing (3.125 m): 33 x 17 waypoints x 6 altitudes.
+#   python scripts/myopia.py configs/swarm_rect.yaml --setting IGd_BM_R5 \
+#       --planners greedy decmcts:horizon=2 decmcts:horizon=8,rollout=greedy
+#   python scripts/run_swarm.py configs/swarm_rect.yaml
+name: swarm_rect
+seed: 42
+compat: null
+
+grid:    {size_x: 100, size_y: 50, cell: 0.125}   # 400 rows x 800 cols
+lattice: {xy_step: 3.125, h_min: null, h_step: null, n_alt: 6, fov_deg: 60}
+field:   {type: gaussian, r: 5}
+sensor:  {type: theoretical, a: 1.0, b: 0.015}
+agents:  {n: 4, start: legacy}        # legacy corner order, as swarm.yaml
+run:     {weights: adaptive, steps: 150, runs: 20}   # 2x the area: 150 steps
+
+settings:                             # optional `mcts:` per setting overrides the section below
+  IG_BS_Rinf: {range: 32, sharing: BS, greedy: ig, mcts: {horizon: 2}}    # 32 waypoints = whole field
+  IGd_BM_R5:  {range: 5,  sharing: BM, greedy: igd, mcts: {horizon: 8, rollout: greedy}}
+
+planners: [greedy, decmcts]
+
+mcts:
+  variant: single
+  horizon: 3
+  iterations: 10
+  rollouts: 10
+  gamma: 0.99

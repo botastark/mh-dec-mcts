@@ -1,0 +1,47 @@
+{
+ "setting": "IG_BS_Rinf",
+ "seed": 1000,
+ "runs": 20,
+ "steps": 100,
+ "base": {
+  "variant": "single",
+  "horizon": 3,
+  "iterations": 10,
+  "rollouts": 10,
+  "gamma": 0.99
+ },
+ "rows": [
+  {
+   "param": "base",
+   "value": null,
+   "mcts": {
+    "variant": "single",
+    "horizon": 3,
+    "iterations": 10,
+    "rollouts": 10,
+    "gamma": 0.99
+   },
+   "d_auc": 0.00024158386268296558,
+   "se_auc": 5.417122662368715e-05,
+   "d_final": 4.25581332921736e-06,
+   "se_final": 1.1388359596146678e-06,
+   "s_per_step": 0.22098457527160648
+  },
+  {
+   "param": "horizon",
+   "value": 2,
+   "mcts": {
+    "variant": "single",
+    "horizon": 2,
+    "iterations": 10,
+    "rollouts": 10,
+    "gamma": 0.99
+   },
+   "d_auc": -2.6089783341257112e-05,
+   "se_auc": 4.8532545791263756e-05,
+   "d_final": 4.097409509939034e-06,
+   "se_final": 1.1144726116490747e-06,
+   "s_per_step": 0.14159758818149568
+  }
+ ]
+}

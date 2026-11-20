@@ -1,0 +1,34 @@
+# The two swarm settings of the legacy multi-horizon code (master_config "limited_testing"),
+# named after Pierdicca et al. Fig. 5 conditions:
+#   IG_BS_Rinf : unlimited comms (R = inf), one shared news belief (BS); greedy baseline = IG
+#   IGd_BM_R5  : comms range 5 waypoints (15.6 m), per-agent news (BM); greedy baseline = IGd
+# The IG / IGd prefix only picks the greedy variant (paper: IGd = IG discounted with the
+# neighbours' positions). Dec-MCTS always exchanges its plans with every agent within range,
+# i.e. with everyone in IG_BS_Rinf and with the R = 5 neighbours in IGd_BM_R5.
+# Shared, as in legacy: Gaussian field r = 5, 4 UAVs from the corners, adaptive weights,
+# 100 steps x 20 runs. Our own seeding and correct adaptive weights (compat null).
+#   python scripts/run_swarm.py configs/swarm.yaml
+#   python scripts/plot_swarm.py results/swarm/swarm
+name: swarm
+seed: 42
+compat: null
+
+grid:    {size_x: 50, size_y: 50, cell: 0.125}
+lattice: {xy_step: null, h_min: null, h_step: null, n_alt: 6, fov_deg: 60}
+field:   {type: gaussian, r: 5}
+sensor:  {type: theoretical, a: 1.0, b: 0.015}
+agents:  {n: 4, start: legacy}        # legacy corner order
+run:     {weights: adaptive, steps: 100, runs: 20}
+
+settings:
+  IG_BS_Rinf: {range: 16, sharing: BS, greedy: ig}
+  IGd_BM_R5:  {range: 5,  sharing: BM, greedy: igd}
+
+planners: [greedy, decmcts]           # greedy = the setting's IG / IGd; mh: to come
+
+mcts:
+  variant: single
+  horizon: 3
+  iterations: 10
+  rollouts: 10
+  gamma: 0.99

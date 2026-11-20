@@ -121,7 +121,8 @@ class PierdiccaSweep:
 
 
 def make_planner(name: str, lat: Lattice, rates: SensorRates, compat: str | None = None):
-    """compat="pierdicca": exact-tie greedy IG and Pierdicca's sweep pattern."""
+    """compat="pierdicca": exact-tie greedy IG and Pierdicca's sweep pattern.
+    Dec-MCTS needs the config and scenario: planning.dec_mcts.make_dec_mcts(cfg, sc)."""
     pierdicca = compat == "pierdicca"
     if name == "ig":
         return GreedyIG(lat, rates, tie_eps=0.0 if pierdicca else 1e-4)

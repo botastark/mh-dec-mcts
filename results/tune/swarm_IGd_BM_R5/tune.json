@@ -1,0 +1,47 @@
+{
+ "setting": "IGd_BM_R5",
+ "seed": 1000,
+ "runs": 20,
+ "steps": 100,
+ "base": {
+  "variant": "single",
+  "horizon": 3,
+  "iterations": 10,
+  "rollouts": 10,
+  "gamma": 0.99
+ },
+ "rows": [
+  {
+   "param": "base",
+   "value": null,
+   "mcts": {
+    "variant": "single",
+    "horizon": 3,
+    "iterations": 10,
+    "rollouts": 10,
+    "gamma": 0.99
+   },
+   "d_auc": -0.0006897830419158504,
+   "se_auc": 0.0004188084207837685,
+   "d_final": 8.619005607291216e-06,
+   "se_final": 4.3764791914480355e-06,
+   "s_per_step": 0.21393345582485196
+  },
+  {
+   "param": "horizon",
+   "value": 2,
+   "mcts": {
+    "variant": "single",
+    "horizon": 2,
+    "iterations": 10,
+    "rollouts": 10,
+    "gamma": 0.99
+   },
+   "d_auc": -0.0006549010393081614,
+   "se_auc": 0.00036921157383028314,
+   "d_final": 1.3349025531627731e-05,
+   "se_final": 4.084208502358234e-06,
+   "s_per_step": 0.1354503582715988
+  }
+ ]
+}
