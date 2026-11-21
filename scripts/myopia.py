@@ -21,13 +21,19 @@ flown poses (starts excluded, they are not observed):
     misalignment  disagreement between the UAVs' beliefs (variance across UAVs, mean over cells)
     balance       how evenly the UAVs share the work: coefficient of variation of the number of
                   cells each UAV saw first (0 = equal shares; 1 UAV doing everything = high)
-    dwell         longest stretch of steps a UAV stays inside a (2*box+1)^2 block of waypoints (any
-                  altitude) while the team map is not done yet (MSE > --done): a UAV trapped at a
-                  local maximum. "trapped" = share of runs where some UAV dwells >= --trap steps.
+    stall         longest stretch of steps in which the team's entropy falls by less than
+                  --stall-rate (1 %) of what is left per step, while > 20 % of the initial entropy
+                  is still left: the team is busy but learning almost nothing (a trap).
+    incomplete    runs that end with < 95 % of the field ever seen (part of the field abandoned)
 Output in results/myopia/<name>_<setting>/:
     myopia.png     mission (MSE, entropy drop, altitude, coverage) and team (overlap, connectivity,
                    misalignment, backfill) over time, mean +- s.e.
-    firstseen.png  run 0: step at which each cell was first seen, paths on top
+    runs.json      per-run numbers and mean curves of every planner (for later figures)
+    runs.png       one dot per run: avg MSE of each planner vs greedy on the same run (below the
+                   diagonal = better), final coverage, longest stall: shows rare failures that
+                   averages hide
+    firstseen.png  the run where greedy did worst (lowest final coverage, then highest MSE), all
+                   planners on that same field: step at which each cell was first seen, paths
 """
 
 import os
@@ -35,6 +41,8 @@ import os
 os.environ.setdefault("OMP_NUM_THREADS", "1")
 
 import argparse
+import json
+import time
 import warnings
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
@@ -54,34 +62,29 @@ def parse(spec: str) -> tuple[str, dict]:
     return name, {k: yaml.safe_load(v) for k, v in (kv.split("=", 1) for kv in rest.split(",") if kv)}
 
 
-def longest_dwell(path, mse, box: int, done: float) -> int:
-    """Longest run of consecutive steps inside one (2*box+1)^2 waypoint block, counting only
-    steps where the map is not done (mse > done)."""
-    best = 0
-    for a in range(len(path)):
-        if mse[a] <= done:
-            break
-        lo_x = hi_x = path[a].ix
-        lo_y = hi_y = path[a].iy
-        b = a
-        while b + 1 < len(path) and mse[b + 1] > done:
-            p = path[b + 1]
-            lo_x, hi_x, lo_y, hi_y = min(lo_x, p.ix), max(hi_x, p.ix), min(lo_y, p.iy), max(hi_y, p.iy)
-            if hi_x - lo_x > 2 * box or hi_y - lo_y > 2 * box:
-                break
-            b += 1
-        best = max(best, b - a + 1)
+def longest_stall(h: np.ndarray, rate: float, left: float = 0.2) -> int:
+    """Longest run of steps where entropy falls by < rate * (what is left) per step, while more
+    than `left` of the initial entropy remains."""
+    best = cur = 0
+    for t in range(len(h) - 1):
+        if h[t] > left * h[0] and (h[t] - h[t + 1]) < rate * h[t]:
+            cur += 1
+            best = max(best, cur)
+        else:
+            cur = 0
     return best
 
 
 def one_run(cfg: dict, setting: dict, spec: str, run: int, steps: int, late: int,
-            box: int = 2, done: float = 0.005) -> dict:
+            stall_rate: float = 0.01) -> dict:
     name, over = parse(spec)
     cfg = {**cfg, "mcts": {**cfg["mcts"], **over}}
     sc = make_scenario(cfg, run)
     planner = setting["greedy"] if name == "greedy" else name
     dec = make_dec_mcts(cfg, sc) if planner == "decmcts" else None
+    t0 = time.process_time()
     res = run_multi(sc, planner, steps, mapping_weights(cfg), setting["sharing"], setting["range"], 1e-4, dec)
+    cpu = (time.process_time() - t0) / steps  # CPU seconds per step (whole team)
     lat = sc.lattice
     first = np.full(sc.grid.shape, -1, dtype=np.int32)
     col_first = np.full(sc.grid.shape[1], -1)  # step at which any cell of each column was first seen
@@ -108,16 +111,14 @@ def one_run(cfg: dict, setting: dict, spec: str, run: int, steps: int, late: int
         connected.append(float(np.mean([len(x) > 0 for x in nb])))
         cov.append(float((first >= 0).mean()))
         back.append(n_back / first.size)
-    keep = run == 0
     team_mse = np.mean(res.mse, axis=1)
-    dwell = max(longest_dwell(path[1:], team_mse, box, done) for path in res.poses)
     team_h = np.mean(res.entropy, axis=1)
-    return {"coverage": cov, "backfill": back, "mse": team_mse.tolist(), "dwell": dwell,
+    return {"coverage": cov, "backfill": back, "mse": team_mse.tolist(),
             "entropy": team_h.tolist(), "h_drop": (-np.diff(team_h)).tolist(),
             "alt": np.mean(res.altitude, axis=1).tolist(), "altitude": float(np.mean(res.altitude)),
             "overlap": overlap, "connected": connected, "misalignment": list(res.misalignment),
             "balance": float(credit.std() / max(credit.mean(), 1e-12)),
-            "first": first if keep else None, "poses": res.poses if keep else None, "sc": sc if keep else None}
+            "stall": longest_stall(team_h, stall_rate), "first": first, "poses": res.poses, "cpu": cpu}
 
 
 def main():
@@ -130,10 +131,11 @@ def main():
     ap.add_argument("--jobs", type=int, default=os.cpu_count())
     ap.add_argument("--late", type=int, default=10, help="steps after which a first sighting counts as backfill")
     ap.add_argument("--n", type=int, help="number of UAVs (default: the config's)")
-    ap.add_argument("--box", type=int, default=2, help="dwell block half-size in waypoints")
-    ap.add_argument("--done", type=float, default=0.005, help="team MSE below which the map counts as done")
-    ap.add_argument("--trap", type=int, default=20, help="dwell steps that count as trapped")
+    ap.add_argument("--stall-rate", type=float, default=0.01,
+                    help="entropy drop per step, as a share of what is left, below which a step stalls")
+    ap.add_argument("--trap", type=int, default=15, help="stall steps in a row that count as a stalled run")
     ap.add_argument("--out", default="results/myopia")
+    ap.add_argument("--tag", help="output folder name (default: <config name>_<setting>)")
     args = ap.parse_args()
     cfg = load_config(args.config, **({"agents": {"n": args.n}} if args.n else {}))
     setting = cfg["settings"][args.setting]
@@ -141,7 +143,7 @@ def main():
     runs, steps = args.runs or cfg["run"]["runs"], args.steps or cfg["run"]["steps"]
 
     with ProcessPoolExecutor(args.jobs) as ex:
-        futs = {(s, i): ex.submit(one_run, cfg, setting, s, i, steps, args.late, args.box, args.done)
+        futs = {(s, i): ex.submit(one_run, cfg, setting, s, i, steps, args.late, args.stall_rate)
                 for s in args.planners for i in range(runs)}
         res = {s: [futs[(s, i)].result() for i in range(runs)] for s in args.planners}
 
@@ -150,7 +152,7 @@ def main():
     ref = np.array([np.mean(r["mse"]) for r in res[args.planners[0]]])
     print(f"{'planner':>36s} {'steps to 80% cov':>17s} {'to 95%':>8s} {'backfill %':>13s} {'avg MSE':>9s}"
           f" {'vs ' + args.planners[0] + ' (paired)':>26s} {'final MSE':>10s} {'mean alt':>8s}"
-          f" {'dwell':>11s} {'trapped':>8s}")
+          f" {'stall':>11s} {'stalled':>8s} {'incomplete':>10s}")
     for s, rs in res.items():
         cov = np.array([r["coverage"] for r in rs])
         t80 = np.array([np.argmax(c >= 0.8) if c[-1] >= 0.8 else np.nan for c in cov])
@@ -163,8 +165,17 @@ def main():
               f" {bf.mean():7.1f} +- {se(bf):3.1f} {mse.mean():9.4f}"
               f" {d.mean():+.4f} +- {se(d):.4f} ({100 * d.mean() / ref.mean():+5.1f}%)"
               f" {mse[:, -1].mean():10.5f} {np.mean([r['altitude'] for r in rs]):7.1f}m"
-              f" {np.mean(dw := [r['dwell'] for r in rs]):5.1f} +- {se(np.array(dw)):3.1f}"
-              f" {sum(d >= args.trap for d in dw):3d}/{len(dw)}")
+              f" {np.mean(st := [r['stall'] for r in rs]):5.1f} +- {se(np.array(st)):3.1f}"
+              f" {sum(d >= args.trap for d in st):5d}/{len(st)}"
+              f" {sum(r['coverage'][-1] < 0.95 for r in rs):7d}/{len(rs)}")
+
+    print(f"\n{'avg MSE per run':>36s} {'median':>8s} {'std':>8s} {'90th pct':>9s} {'worst':>8s}"
+          f" {'stall >= trap':>14s} {'avg MSE of stalled runs':>24s}")
+    for s, rs in res.items():
+        m = np.array([np.mean(r["mse"]) for r in rs])
+        st = np.array([r["stall"] >= args.trap for r in rs])
+        print(f"{s:>36s} {np.median(m):8.4f} {m.std():8.4f} {np.percentile(m, 90):9.4f} {m.max():8.4f}"
+              f" {st.sum():10d}/{len(rs)} {(m[st].mean() if st.any() else np.nan):24.4f}")
 
     print(f"\n{'team':>36s} {'overlap':>14s} {'connectivity':>14s} {'misalignment':>14s} {'balance':>12s}")
     for s, rs in res.items():
@@ -174,11 +185,35 @@ def main():
         print(f"{s:>36s} " + " ".join(f"{np.mean(c):7.3f} +-{se(c):5.3f}" for c in cols)
               + f" {np.mean(bal):5.2f} +-{se(bal):4.2f}")
 
-    out = Path(args.out) / f"{cfg['name']}_{args.setting}"
+    out = Path(args.out) / (args.tag or f"{cfg['name']}_{args.setting}")
     out.mkdir(parents=True, exist_ok=True)
+    save_runs(res, out / "runs.json", {"config": args.config, "setting": args.setting, "runs": runs,
+                                       "steps": steps, "n": cfg["agents"]["n"], "trap": args.trap})
     plot_curves(res, out / "myopia.png", f"{cfg['name']} {args.setting}: {runs} runs")
-    plot_first_seen(res, out / "firstseen.png", steps)
+    plot_runs(res, out / "runs.png", f"{cfg['name']} {args.setting}: one dot per run")
+    ref_runs = res[args.planners[0]]
+    worst = min(range(runs), key=lambda i: (ref_runs[i]["coverage"][-1], -np.mean(ref_runs[i]["mse"])))
+    plot_first_seen(res, cfg, worst, out / "firstseen.png", steps)
     print(f"-> {out}")
+
+
+def save_runs(res, path, meta):
+    """Everything later figures need, without the maps: per planner, per-run scalars and the
+    mean curves. Read back with json.load."""
+    keys = ("mse", "h_drop", "alt", "coverage", "overlap", "connected", "misalignment", "backfill")
+    out = {"meta": meta, "planners": {}}
+    for s, rs in res.items():
+        cov = [r["coverage"] for r in rs]
+        out["planners"][s] = {
+            "runs": [{"avg_mse": float(np.mean(r["mse"])), "final_mse": float(r["mse"][-1]),
+                      "stall": int(r["stall"]), "final_cov": float(r["coverage"][-1]),
+                      "t80": next((t for t, c in enumerate(c_) if c >= 0.8), None),
+                      "t95": next((t for t, c in enumerate(c_) if c >= 0.95), None),
+                      "altitude": r["altitude"], "balance": r["balance"], "cpu_per_step": r["cpu"]}
+                     for r, c_ in zip(rs, cov)],
+            "mean": {k: np.mean([r[k] for r in rs], axis=0).tolist() for k in keys},
+        }
+    path.write_text(json.dumps(out))
 
 
 def plot_curves(res, path, title):
@@ -208,24 +243,58 @@ def plot_curves(res, path, title):
     plt.close(fig)
 
 
-def plot_first_seen(res, path, steps):
+def plot_runs(res, path, title):
+    """Per run: avg MSE vs the first planner (paired), final coverage, longest stall."""
     import matplotlib.pyplot as plt
 
+    names = list(res)
+    ref = np.array([np.mean(r["mse"]) for r in res[names[0]]])
+    fig, axs = plt.subplots(1, 3, figsize=(16, 4.8))
+    for k, s in enumerate(names):
+        rs = res[s]
+        col = f"C{k}"
+        if k:
+            axs[0].scatter(ref, [np.mean(r["mse"]) for r in rs], s=18, color=col, label=s)
+        x = k + np.linspace(-0.2, 0.2, len(rs))
+        axs[1].scatter(x, [r["coverage"][-1] for r in rs], s=14, color=col)
+        axs[2].scatter(x, [r["stall"] for r in rs], s=14, color=col)
+    lim = [min(ref.min(), axs[0].get_ylim()[0]), max(ref.max(), axs[0].get_ylim()[1])]
+    axs[0].plot(lim, lim, "k--", lw=0.8)
+    axs[0].set(xlabel=f"avg MSE, {names[0]}", ylabel="avg MSE, planner (same run)",
+               title="below the diagonal = better than " + names[0])
+    axs[0].legend(fontsize=8)
+    for ax, lab in ((axs[1], "final coverage"), (axs[2], "longest stall (steps)")):
+        ax.set_xticks(range(len(names)), names, rotation=20, ha="right", fontsize=8)
+        ax.set(ylabel=lab)
+    for ax in axs:
+        ax.grid(alpha=0.4)
+    fig.suptitle(title)
+    fig.tight_layout()
+    fig.savefig(path, dpi=150)
+    plt.close(fig)
+
+
+def plot_first_seen(res, cfg, run, path, steps):
+    """Run `run` (the same field for every planner): step at which each cell was first seen."""
+    import matplotlib.pyplot as plt
+
+    sc = make_scenario(cfg, run)
     fig, axs = plt.subplots(len(res), 1, figsize=(8, 3.8 * len(res)), squeeze=False, layout="constrained")
     for ax, (s, rs) in zip(axs[:, 0], res.items()):
-        r = rs[0]
-        sc, first = r["sc"], r["first"].astype(float)
+        r = rs[run]
+        first = r["first"].astype(float)
         first[first < 0] = np.nan  # never seen: white
         im = ax.imshow(first, cmap="viridis", vmin=0, vmax=steps, origin="upper")
+        ax.contour(sc.truth, levels=[0.5], colors="k", linewidths=0.4, alpha=0.5)  # ground-truth clusters
         for poses in r["poses"]:
             ij = np.array([sc.grid.xy_to_ij(*sc.lattice.xyz(p)[:2]) for p in poses])
             ax.plot(ij[:, 1], ij[:, 0], color="red", lw=0.8)
             ax.plot(ij[0, 1], ij[0, 0], "wo", ms=5)
-        ax.set(title=f"{s} (run 0)", xticks=[], yticks=[],
-               xlim=(-0.5, first.shape[1] - 0.5), ylim=(first.shape[0] - 0.5, -0.5))  # no autoscale margins
+        ax.set(title=f"{s}: coverage {r['coverage'][-1]:.2f}, avg MSE {np.mean(r['mse']):.4f}",
+               xticks=[], yticks=[], xlim=(-0.5, first.shape[1] - 0.5), ylim=(first.shape[0] - 0.5, -0.5))
         fig.colorbar(im, ax=ax, shrink=0.9)
-    fig.suptitle("step at which each cell was first seen (white = never)\n"
-                 "late colours behind the paths = missed, came back")
+    fig.suptitle(f"run {run} (worst for the first planner): step at which each cell was first seen\n"
+                 "white = never seen, black lines = ground-truth cluster edges")
     fig.savefig(path, dpi=150)
     plt.close(fig)
 
