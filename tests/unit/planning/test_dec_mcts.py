@@ -223,4 +223,6 @@ def test_lbp_model_off_plans_with_bayes_only():
     sc = scen(1)
     dm = make_dec_mcts({**CFG, "mcts": {**CFG["mcts"], "lbp_model": False}}, sc)
     assert dm.psi is None
-    assert make_dec_mcts(CFG, sc).psi is not None
+    assert make_dec_mcts(CFG, sc).psi is None  # default: Bayes only, as greedy IG
+    on = make_dec_mcts({**CFG, "mcts": {**CFG["mcts"], "lbp_model": True}}, sc)
+    assert on.psi is not None

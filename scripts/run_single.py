@@ -3,8 +3,6 @@
     python scripts/run_single.py configs/paper.yaml                          # Fig. 3: ig, random, sweep
     python scripts/run_single.py configs/paper.yaml --planners ig --weights adaptive --r 2
     python scripts/run_single.py configs/paper.yaml --runs 2 --steps 30      # quick
-    python scripts/run_single.py configs/wheat.yaml --planners ig sweep
-    python scripts/run_single.py configs/decmcts.yaml --planners ig decmcts      # MCTS, one UAV
 """
 
 import argparse

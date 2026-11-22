@@ -127,7 +127,7 @@ def plot(rows, conditions, horizons):
     fig.tight_layout()
     FIGS.mkdir(parents=True, exist_ok=True)
     for ext in ("pdf", "png"):
-        fig.savefig(FIGS / f"horizon_sweep.{ext}", dpi=200)
+        fig.savefig(str(FIGS / f"horizon_sweep.{ext}"), dpi=200)
     plt.close(fig)
 
 

@@ -28,7 +28,7 @@ def test_paper_config_matches_paper():
     assert (sc.lattice.nx, sc.lattice.ny, sc.lattice.n_alt) == (17, 17, 6)
     assert sc.lattice.altitudes[3] == pytest.approx(21.65, abs=0.01)
     assert sc.starts == [Pose(0, 0, 0)]
-    assert cfg["run"] == {"planner": "ig", "weights": "equal", "steps": 100, "runs": 20}
+    assert cfg["run"] == {"planner": "ig", "weights": "equal", "steps": 300, "runs": 20}
 
 
 def test_overrides_and_defaults():

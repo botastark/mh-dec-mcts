@@ -7,7 +7,7 @@
 #   CONFIGS="swarm_rect wheat_trap" bash scripts/experiments.sh
 set -u
 JOBS=${JOBS:-8}
-CONFIGS=${CONFIGS:-"swarm_big"}   # also: swarm swarm_rect swarm_rect_low wheat_trap
+CONFIGS=${CONFIGS:-"swarm_big"}   # also: swarm swarm_rect
 SETTINGS=${SETTINGS:-"IGd_BM_R5 IG_BS_Rinf"}
 PLANNERS=${PLANNERS:-"greedy decmcts:horizon=2 decmcts:horizon=8,rollout=greedy decmcts:horizon=16,rollout=greedy"}
 export OMP_NUM_THREADS=1

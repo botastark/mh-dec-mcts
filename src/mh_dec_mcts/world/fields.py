@@ -86,3 +86,5 @@ def load_annotations(path: str, shape: tuple[int, int], crop=None) -> np.ndarray
         return matrix
     except Exception as e:
         raise ValueError(f"Error reading the file {path}: {e}")
+
+

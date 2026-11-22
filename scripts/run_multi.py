@@ -3,7 +3,6 @@
     python scripts/run_multi.py configs/pierdicca_fig5.yaml                      # full Fig. 5 grid
     python scripts/run_multi.py configs/pierdicca_fig5.yaml --planners ig --sharing BM --ranges 16 --n 4
     python scripts/run_multi.py configs/pierdicca_fig5.yaml --runs 2 --steps 20  # quick
-    python scripts/run_multi.py configs/decmcts.yaml --planners decmcts igd --sharing none
 
 Output: results/multi/<name>/<planner>_<sharing>_R<range>_N<n>.json with mean/std over runs of
 the per-agent averaged MSE, entropy, altitude, and the misalignment.

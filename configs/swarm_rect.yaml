@@ -3,7 +3,6 @@
 # Same lattice spacing (3.125 m): 33 x 17 waypoints x 6 altitudes.
 #   python scripts/myopia.py configs/swarm_rect.yaml --setting IGd_BM_R5 \
 #       --planners greedy decmcts:horizon=2 decmcts:horizon=8,rollout=greedy
-#   python scripts/run_swarm.py configs/swarm_rect.yaml
 name: swarm_rect
 seed: 42
 compat: null
