@@ -51,6 +51,7 @@ import numpy as np
 import yaml
 
 from mh_dec_mcts.comms.network import neighbours
+from mh_dec_mcts.planning.mh_mcts import split_overrides
 from mh_dec_mcts.planning.planners import make_planner
 from mh_dec_mcts.scenario import load_config, make_scenario, mapping_weights
 from mh_dec_mcts.sim.multi import run_multi
@@ -78,7 +79,8 @@ def longest_stall(h: np.ndarray, rate: float, left: float = 0.2) -> int:
 def one_run(cfg: dict, setting: dict, spec: str, run: int, steps: int, late: int,
             stall_rate: float = 0.01) -> dict:
     name, over = parse(spec)
-    cfg = {**cfg, "mcts": {**cfg["mcts"], **over}}
+    mcts_over, mh_over = split_overrides(over)  # e.g. mhmcts:horizon=4,tile=12.5
+    cfg = {**cfg, "mcts": {**cfg["mcts"], **mcts_over}, "mh": {**cfg.get("mh", {}), **mh_over}}
     sc = make_scenario(cfg, run)
     planner = setting["greedy"] if name == "greedy" else name
     pl = make_planner(planner, cfg, sc, setting["range"])

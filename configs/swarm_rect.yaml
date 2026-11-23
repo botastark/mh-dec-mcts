@@ -37,3 +37,9 @@ mcts:                    # planning/dec_mcts.py DecMCTSConfig
   alpha: 0.1             # step size of the q update (Alg. 3)
   beta0: 0.1             # temperature of the q update, lowered by `cool` each round
   cool: 0.8
+
+mh:                      # planning/mh_mcts.py MHConfig; spec mhmcts:... (low level = the mcts section)
+  tile: 25.0             # region side in metres (100 x 50 m -> 4 x 2 regions)
+  done_entropy: 0.3      # a region is finished below this mean cell entropy (bits; unknown = 1)
+  rate: auto             # lam, bits per step (auto: one look at the lowest altitude, unknown field)
+  g2_weight: 1.0         # w in f = g1 + w lam (T_stay - T_plan); 0 = Dec-MCTS

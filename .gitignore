@@ -221,11 +221,3 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
-
-
-
-# Experiment results kept locally for now
-# results/
-experiments/
-*.png
-!docs/**/*.png
