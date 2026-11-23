@@ -46,7 +46,6 @@ def band(ax, d, key, color, lw=1.2):
     t = np.arange(len(mu))
     ax.plot(t, mu, color=color, lw=lw)
     ax.fill_between(t, mu - sd, mu + sd, color=color, alpha=0.08, lw=0)
-    return len(mu)
 
 
 def main():
@@ -57,6 +56,7 @@ def main():
     args = ap.parse_args()
     root = Path(args.root)
     data = load(root, args.name)
+    n = max(len(d["mse"]["mean"]) for d in data.values())  # steps per run: the x-axis length
 
     fig = plt.figure(figsize=(10, 7.5))
     gs = fig.add_gridspec(3, 6, height_ratios=[1.3, 0.8, 0.8], hspace=0.45, wspace=0.9)
@@ -66,7 +66,7 @@ def main():
         ax = fig.add_subplot(gs[0, 3 * c:3 * c + 3])
         for w in WEIGHTS:
             for r in RS:
-                n = band(ax, data[w, r], key, shade(w, r))
+                band(ax, data[w, r], key, shade(w, r))
         ax.set(xlabel="Step", ylabel=label, xlim=(-2, n + 1), xticks=range(0, n + 1, 10))
         ax.grid(alpha=0.4)
         if key == "mse":  # paper: 0.00 .. 0.35 every 0.05
@@ -87,7 +87,7 @@ def main():
         for c, w in enumerate(WEIGHTS):
             ax = fig.add_subplot(gs[row, 2 * c:2 * c + 2])
             for r in RS:
-                n = band(ax, data[w, r], key, shade(w, r))
+                band(ax, data[w, r], key, shade(w, r))
             ax.set(xlim=(-2, n + 1), xticks=(0, n // 2, n))
             if key == "altitude":
                 ax.set_yticks(ALTITUDES)

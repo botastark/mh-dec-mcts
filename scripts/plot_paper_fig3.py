@@ -67,7 +67,7 @@ def main():
             ax.set_title(NAMES[p], fontsize=9)
 
     sm = cm.ScalarMappable(cmap="jet", norm=Normalize(0, TRAJ_STEPS))
-    cax = fig.add_axes([0.13, 0.04, 0.3, 0.008])
+    cax = fig.add_axes((0.13, 0.04, 0.3, 0.008))
     fig.colorbar(sm, cax=cax, orientation="horizontal").set_label("Step")
 
     out = Path(args.out) if args.out else folder / "paper_fig3.png"
