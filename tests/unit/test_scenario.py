@@ -92,11 +92,20 @@ def test_orthomap_field(tmp_path):
     ann = np.zeros((14, 24), int)
     ann[2:12, 2:22] = np.random.default_rng(0).choice([0, 1, 2, 10], (10, 20))
     np.savetxt(tmp_path / "ann.txt", ann, fmt="%d")
-    cfg = small(field={"type": "orthomap", "annotations": str(tmp_path / "ann.txt"), "crop": [2, 12, 2, 22]},
+    cfg = small(field={"type": "orthomap", "annotations": str(tmp_path / "ann.txt"), "crop": [2, 12, 2, 22],
+                       "labels": {0: 0, 1: 1, 2: 1, 10: 1}},
                 grid={"size_x": 20, "size_y": 10, "cell": 1.0}, lattice={"xy_step": 2.0})
     a, b = make_scenario(cfg, 0), make_scenario(cfg, 5)
     np.testing.assert_array_equal(a.truth, b.truth)  # fixed across runs
     np.testing.assert_array_equal(a.truth, np.isin(ann[2:12, 2:22], (1, 2, 10)))
+
+
+def test_unmapped_annotation_label_is_an_error(tmp_path):
+    np.savetxt(tmp_path / "ann.txt", np.array([[0, 1], [2, 10]]), fmt="%d")
+    cfg = small(field={"type": "orthomap", "annotations": str(tmp_path / "ann.txt"), "labels": {0: 0, 1: 1, 2: 1}},
+                grid={"size_x": 2, "size_y": 2, "cell": 1.0}, lattice={"xy_step": 1.0})
+    with pytest.raises(ValueError, match=r"labels \[10\] have no meaning"):
+        make_scenario(cfg)
 
 
 def test_field_shape_mismatch_is_an_error(tmp_path):

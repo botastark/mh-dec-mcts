@@ -32,3 +32,4 @@ mcts:
   iterations: 10
   rollouts: 10
   gamma: 0.99
+  lbp_model: false

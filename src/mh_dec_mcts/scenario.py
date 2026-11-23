@@ -7,6 +7,12 @@
 This is the only module that branches on the field / sensor type. Planners, the mapper and
 the simulation loop only see a Scenario.
 
+Field (config `field`):
+    gaussian:  r (spectral exponent), ref (optional outer scale in metres: cluster size
+               independent of the field size; default the longest side)
+    orthomap:  annotations (.txt, kept as inherited), crop (r0, r1, c0, c1),
+               labels ({raw label: 0 or 1}; every label in the file must be mapped)
+
 Seeding (default, legacy-compatible): run i uses run_seed = seed + i for the Gaussian field,
 the observation noise and the legacy random start corner; planner randomness (tie-breaks,
 Random, Sweep direction) gets its own stream so it never shifts the observation draws.
@@ -40,6 +46,7 @@ DEFAULTS = {
     "comms": {"range": None, "sharing": "none"},  # range in waypoint steps (None = unlimited); none | BS | BM
     "run": {"planner": "ig", "weights": "equal", "steps": 100, "runs": 20},
     "mcts": {},  # DecMCTSConfig overrides for planner "decmcts" (planning/dec_mcts.py)
+    "mh": {},  # MHConfig overrides for planner "mhmcts" (planning/mh_mcts.py)
 }
 
 
@@ -58,11 +65,7 @@ class Scenario:
     order_rng: np.random.Generator  # multi-agent decision order (IGd)
 
     @property
-    def obs_rng(self) -> np.random.Generator:  # single agent
-        return self.obs_rngs[0]
-
-    @property
-    def plan_rng(self) -> np.random.Generator:
+    def plan_rng(self) -> np.random.Generator:  # single agent
         return self.plan_rngs[0]
 
     def observe(self, pose: Pose, agent: int = 0) -> np.ndarray:
@@ -143,17 +146,7 @@ def make_scenario(cfg: dict, run: int = 0, streams: dict | None = None) -> Scena
     elif cfg["compat"] is not None:
         raise ValueError(f"unknown compat '{cfg['compat']}'")
 
-    # ground truth
-    f = cfg["field"]
-    if f["type"] == "gaussian":
-        field_rng = streams["map"] if pierdicca else np.random.default_rng(run_seed)
-        truth = gaussian_random_field(f["r"], grid.shape, field_rng)
-    elif f["type"] == "orthomap":
-        truth = load_annotations(f["annotations"], f.get("crop"), tuple(f.get("positive_labels", (1, 2, 10))))
-    else:
-        raise ValueError(f"unknown field type '{f['type']}'")
-    if truth.shape != grid.shape:
-        raise ValueError(f"field {truth.shape} does not match grid {grid.shape}")
+    truth = make_field(cfg["field"], grid, streams["map"] if pierdicca else np.random.default_rng(run_seed))
 
     # sensor: rates computed once (theoretical) or loaded once per process (predictions)
     s = cfg["sensor"]
@@ -188,13 +181,24 @@ def make_scenario(cfg: dict, run: int = 0, streams: dict | None = None) -> Scena
     )
 
 
+def make_field(f: dict, grid: Grid, rng: np.random.Generator) -> np.ndarray:
+    """Ground truth from the config `field` section (Gaussian: drawn with rng)."""
+    if f["type"] == "gaussian":
+        ref_cells = None if f.get("ref") is None else round(f["ref"] / grid.cell)
+        truth = gaussian_random_field(f["r"], grid.shape, rng, ref_cells)
+    elif f["type"] == "orthomap":
+        truth = load_annotations(f["annotations"], f.get("crop"), f.get("labels"))
+    else:
+        raise ValueError(f"unknown field type '{f['type']}'")
+    if truth.shape != grid.shape:
+        raise ValueError(f"field {truth.shape} does not match grid {grid.shape}")
+    return truth
+
+
 def calibration_field(cfg: dict, grid: Grid) -> np.ndarray:
     """A field like the scenario's for calibrating planner models: a fresh Gaussian field with
-    the same r (fixed seed, never one of the evaluated fields), or the annotated map itself."""
-    f = with_defaults(cfg)["field"]
-    if f["type"] == "gaussian":
-        return gaussian_random_field(f["r"], grid.shape, np.random.default_rng([999, 999]))
-    return load_annotations(f["annotations"], f.get("crop"), tuple(f.get("positive_labels", (1, 2, 10))))
+    the same r and ref (fixed seed, never one of the evaluated fields), or the annotated map."""
+    return make_field(with_defaults(cfg)["field"], grid, np.random.default_rng([999, 999]))
 
 
 def mapping_weights(cfg: dict) -> str:

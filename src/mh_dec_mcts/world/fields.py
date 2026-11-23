@@ -12,6 +12,11 @@ def gaussian_random_field(r: float, shape: tuple[int, int], rng: np.random.Gener
     - seed: Random seed for reproducibility (default: None).
 
     - cache_dir: Directory to store cached fields (default: "cache").
+    - ref_cells: Outer scale L0 in cells (config `field.ref` / cell). Wavenumbers are counted in
+               cycles per ref_cells cells on both axes, so clusters are round on rectangles, and
+               waves longer than ref_cells (|k| < 1) get the |k| = 1 amplitude, so clusters keep
+               the same physical size on any field. None: the shortest side (cluster size then
+               grows with the field). Square field with ref_cells = its side: exactly the original.
 
     Returns:
     - 2D binary random field as a numpy array.
@@ -27,11 +32,7 @@ def gaussian_random_field(r: float, shape: tuple[int, int], rng: np.random.Gener
         b = [-i for i in b]
         return a + b
 
-    # wavenumbers in cycles per `ref_cells` cells on both axes (round clusters on rectangles).
-    # ref_cells = None: the longest side (cluster size grows with the field). Waves longer than
-    # ref_cells (k < 1) get the k = 1 amplitude, so clusters keep the same physical size on any
-    # field. Square field with ref_cells = its side: exactly the original.
-    n = ref_cells or max(n_cell_x, n_cell_y)
+    n = ref_cells or min(n_cell_x, n_cell_y)
     sx, sy = n / n_cell_x, n / n_cell_y
 
     def _pk2(kx, ky):
@@ -65,26 +66,31 @@ def gaussian_random_field(r: float, shape: tuple[int, int], rng: np.random.Gener
 
     return binary_field
 
-def load_annotations(path: str, shape: tuple[int, int], crop=None) -> np.ndarray:             # labels {2,10}→1, crop, check values ⊆ {0,1}
+def load_annotations(path: str, crop=None, labels=None) -> np.ndarray:             # labels {2,10}→1, crop, check values ⊆ {0,1}
     """
     Load annotations from a .txt file, convert to binary matrix and optionally crop the array.
+
+     labels  {raw label: 0 or 1}, the mapping to the binary classes (config `field.labels`);
+            None = the file must already be binary. Any label not in the mapping is an error.
+            Wheat orthomap (AGR-o-RAMA/active_sensing): {0: 0, 1: 1, 2: 1, 10: 1},
+            class 0 = lodged, 1 = not lodged.
+    crop    (r0, r1, c0, c1) keeps rows r0:r1 and columns c0:c1 (wheat orthomap: 3, 113, 13, 73).
+
     """
-    try:
-        matrix = np.loadtxt(path, dtype=int)
-        matrix[matrix == 10] = 1
-        matrix[matrix == 2] = 1
-        assert matrix.all() in [
-            0,
-            1,
-        ], "Invalid label values found in the annotation file"
-        if crop is not None:
 
-            matrix = matrix[3:113, 13:73]
-        assert (
-            matrix.shape == shape
-        ), "Grid size mismatch with annotation matrix"
-        return matrix
-    except Exception as e:
-        raise ValueError(f"Error reading the file {path}: {e}")
 
+    labels = {0: 0, 1: 1} if labels is None else {int(k): int(v) for k, v in labels.items()}
+    if not set(labels.values()) <= {0, 1}:
+        raise ValueError(f"field.labels must map to 0 or 1, got {labels}")
+    m = np.loadtxt(path, dtype=int)
+    unknown = np.setdiff1d(np.unique(m), list(labels))
+    if unknown.size:
+        raise ValueError(f"{path}: labels {unknown.tolist()} have no meaning in field.labels {labels}")
+    if crop is not None:
+        r0, r1, c0, c1 = crop
+        m = m[r0:r1, c0:c1]
+    lut = np.zeros(max(labels) + 1, np.uint8)
+    lut[list(labels)] = list(labels.values())
+    return lut[m]
+ 
 

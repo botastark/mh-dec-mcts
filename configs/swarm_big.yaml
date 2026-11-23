@@ -35,7 +35,7 @@ mcts:                    # planning/dec_mcts.py DecMCTSConfig; per-setting `mcts
   share_plans: true      # false: no plan exchange at all (ablation)
   # only for variant distribution:
   n_seq: 10              # plans per UAV in its shared set X_hat
-  resample_every: 10     # rounds between re-selecting X_hat from the tree
+  resample_every: 10     # rounds between re-selecting X_hat from the treecla
   n_samples: 3           # teammate plans / worlds sampled per q update
   alpha: 0.1             # step size of the q update (Alg. 3)
   beta0: 0.1             # temperature of the q update, lowered by `cool` each round
