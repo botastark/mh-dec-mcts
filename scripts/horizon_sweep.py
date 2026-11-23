@@ -11,7 +11,8 @@ UAV the comms setting does not matter). Planners: greedy and Dec-MCTS with horiz
     python scripts/horizon_sweep.py --runs 2 --steps 10 --horizons 2 4 --jobs 2   # smoke test
         (then delete results/horizon_sweep/ before the real run, or pass --force)
 
-Raw results: results/horizon_sweep/<condition>/results.json (older sweeps: runs.json, also read).
+Raw results: results/horizon_sweep/<condition>/ (scripts/run.py output and plot_mission.py figures;
+    older sweeps: runs.json, also read).
 Paper figures: paper/figures/
     horizon_sweep.pdf / .png   per condition (columns) vs horizon: avg MSE and final MSE relative
                                to greedy (paired, mean +- 95 % CI), stalled runs, CPU per step;
@@ -19,13 +20,18 @@ Paper figures: paper/figures/
     horizon_sweep.csv          all numbers behind the figure
 """
 
+import os
+
+for _v in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS"):
+    os.environ.setdefault(_v, "1")  # one maths thread per process, before numpy is imported
+
 import argparse
 import csv
-import subprocess
-import sys
 from pathlib import Path
 
 import numpy as np
+from plot_mission import main as plot_mission
+from run import main as run_py
 
 from mh_dec_mcts.experiment import load_results, result_file
 
@@ -53,13 +59,13 @@ def run(conditions, horizons, jobs, runs, steps_override, force):
         if done(name) and not force:
             print(f"{name}: already done (--force to rerun)")
             continue
-        cmd = [sys.executable, "scripts/myopia.py", config, "--setting", setting, "--n", str(n),
-               "--steps", str(steps_override or steps), "--jobs", str(jobs), "--out", str(RAW), "--tag", name,
-               "--planners", "greedy", *[spec(h) for h in horizons]]
+        argv = [config, "--setting", setting, "--n", str(n), "--steps", str(steps_override or steps),
+                "--jobs", str(jobs), "--out", str(RAW), "--tag", name, "--save-poses",
+                "--planners", "greedy", *[spec(h) for h in horizons]]
         if runs:
-            cmd += ["--runs", str(runs)]
-        print(" ".join(cmd), flush=True)
-        subprocess.run(cmd, check=True)
+            argv += ["--runs", str(runs)]
+        print("scripts/run.py " + " ".join(argv), flush=True)
+        plot_mission([str(run_py(argv))])
 
 
 def summarise(conditions, horizons):

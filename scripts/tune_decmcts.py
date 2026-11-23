@@ -30,19 +30,14 @@ from pathlib import Path
 import numpy as np
 import yaml
 
-from mh_dec_mcts.planning.planners import make_planner
-from mh_dec_mcts.scenario import load_config, make_scenario, mapping_weights
-from mh_dec_mcts.sim.multi import run_multi
+from mh_dec_mcts.experiment import one_run
+from mh_dec_mcts.scenario import load_config
 
 
-def one_run(cfg: dict, setting: dict, planner: str, run: int, steps: int):
-    """(mean MSE over steps, final MSE, seconds per step) of one run."""
-    sc = make_scenario(cfg, run)
-    pl = make_planner(planner, cfg, sc, setting["range"])
-    t = time.time()
-    res = run_multi(sc, pl, steps, mapping_weights(cfg), setting["sharing"], setting["range"])
-    mse = np.mean(res.mse, axis=1)
-    return float(mse.mean()), float(mse[-1]), (time.time() - t) / steps
+def score(cfg: dict, setting: dict, planner: str, run: int, steps: int):
+    """(mean MSE over steps, final MSE, wall seconds per step) of one run (experiment.one_run)."""
+    r = one_run(cfg, setting, planner, run, steps, late=10)
+    return float(np.mean(r["mse"])), float(r["mse"][-1]), r["wall"] / steps
 
 
 def main():
@@ -81,7 +76,7 @@ def main():
         futs = {}
         for k, (n, v, m, i) in enumerate(jobs):
             c = {**cfg, "mcts": m} if m is not None else cfg
-            futs[ex.submit(one_run, c, setting, setting["greedy"] if n == "greedy" else "decmcts", i, args.steps)] = k
+            futs[ex.submit(score, c, setting, setting["greedy"] if n == "greedy" else "decmcts", i, args.steps)] = k
         for done, f in enumerate(as_completed(futs), 1):
             k = futs[f]
             out[k] = f.result()
