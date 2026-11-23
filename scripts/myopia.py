@@ -1,6 +1,6 @@
 """Old entry point of planner comparisons, kept for existing commands: runs scripts/run.py with
 myopia.py's defaults (setting IGd_BM_R5, out results/myopia, tag <config name>_<setting>,
-poses saved for the first-seen figure).
+poses saved for the first-seen figure), then scripts/plot_mission.py on the result.
 
     python scripts/myopia.py configs/swarm_rect.yaml --setting IGd_BM_R5 --n 4 \\
         --planners greedy decmcts:horizon=4,rollout=greedy
@@ -10,6 +10,7 @@ poses saved for the first-seen figure).
 
 import sys
 
+from plot_mission import main as plot_main
 from run import main as run_main
 
 from mh_dec_mcts.scenario import load_config
@@ -24,7 +25,7 @@ def main(argv: list[str]) -> None:
     extra += [] if "--out" in argv else ["--out", "results/myopia"]
     extra += [] if "--tag" in argv else ["--tag", f"{load_config(argv[0])['name']}_{setting}"]
     extra += [] if "--planners" in argv else ["--planners", "greedy", "decmcts:horizon=2", "decmcts:horizon=8"]
-    run_main([*argv, *extra, "--save-poses"])
+    plot_main([str(run_main([*argv, *extra, "--save-poses"]))])
 
 
 if __name__ == "__main__":

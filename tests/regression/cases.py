@@ -72,9 +72,19 @@ def run_py(tmp: Path, config, args: list[str]) -> tuple[dict, dict]:
     return res, arrays
 
 
-def _stats(curves: list, key: str) -> dict:
-    a = [c[key] for c in curves]
-    return {"mean": np.mean(a, 0).tolist(), "std": np.std(a, 0).tolist()}
+def scripts():
+    """The plot scripts' modules: each computes what it plots in a function `arrays`."""
+    sys.path.insert(0, str(REPO / "scripts"))
+    import plot_fig3
+    import plot_fig4
+    import plot_fig5
+    import plot_mission
+
+    return plot_fig3, plot_fig4, plot_fig5, plot_mission
+
+
+def ms(mu_sd) -> dict:
+    return {"mean": mu_sd[0].tolist(), "std": mu_sd[1].tolist()}
 
 
 def run_single_case(tmp: Path, name, config, extra, runs, steps) -> dict:
@@ -87,11 +97,16 @@ def run_single_case(tmp: Path, name, config, extra, runs, steps) -> dict:
         planners, extra = [extra[k + 1]], extra[:k] + extra[k + 2:]
     res, arrays = run_py(tmp, config, ["--planners", *planners, *extra, "--runs", str(runs),
                                        "--steps", str(steps), "--save-poses"])
-    names = {"entropy": "entropy", "mse": "mse", "coverage": "coverage_paper", "altitude": "alt"}
-    curves, run0 = {}, {}
+    fig3, fig4, _, _ = scripts()
+    if name == "single_fig4":  # plotted by plot_fig4 (one result per weights and r)
+        cfg = res["meta"]["config_resolved"]
+        (data,) = fig4.arrays({(cfg["run"]["weights"], cfg["field"]["r"]): res["conditions"][0]}).values()
+        plotted = {"ig": data}
+    else:
+        plotted = fig3.arrays(res)
+    curves = {p: {m: ms(d[m]) for m in ("entropy", "mse", "coverage", "altitude")} for p, d in plotted.items()}
+    run0 = {}
     for k, c in enumerate(res["conditions"]):
-        rs = [r["curves"] for r in c["runs"]]
-        curves[c["planner"]] = {m: _stats(rs, key) for m, key in names.items()}
         run0[f"poses_{c['planner']}"] = arrays[f"c{k}_r0_poses"][0].tolist()
     cfg = res["meta"]["config_resolved"]
     tag = cfg["name"] + (f"_r{cfg['field']['r']:g}" if "r" in cfg["field"] else "") + f"_{cfg['run']['weights']}"
@@ -105,11 +120,14 @@ def run_multi_case(tmp: Path) -> dict:
     config, planners, sharing, ranges, ns, runs, steps = MULTI_CASE
     res, _ = run_py(tmp, config, ["--planners", *planners, "--sharing", *sharing, "--ranges", *map(str, ranges),
                                   "--n", *map(str, ns), "--runs", str(runs), "--steps", str(steps)])
-    names = {"mse": "mse", "entropy": "entropy", "altitude": "alt", "misalignment": "misalignment"}
+    from mh_dec_mcts.plotting import band
+
+    _, _, fig5, _ = scripts()
+    plotted = fig5.arrays(res)  # mse, altitude, misalignment as plot_fig5 draws them
     out = {}
     for c in res["conditions"]:
-        rs = [r["curves"] for r in c["runs"]]
-        out[f"{c['planner']}_{c['sharing']}_R{c['range']}_N{c['n']}"] = {m: _stats(rs, k) for m, k in names.items()}
+        k = fig5.key(c["planner"], c["sharing"], c["range"], c["n"])
+        out[k] = {**{m: ms(v) for m, v in plotted[k].items()}, "entropy": ms(band(c, "entropy"))}
     return strip(dict(sorted(out.items())))
 
 
@@ -124,12 +142,16 @@ def as_runs_json(res: dict, n: int) -> dict:
     m = res["meta"]
     saved = {"meta": {"config": m["config"], "setting": m["setting"], "runs": m["runs"], "steps": m["steps"],
                       "n": n, "trap": m["trap"]}, "planners": {}}
+    from mh_dec_mcts.plotting import band
+
+    _, _, _, mission = scripts()
+    plotted = mission.arrays(res["conditions"])  # what plot_mission draws, the rest as stored
     for c in res["conditions"]:
-        rs = [r["curves"] for r in c["runs"]]
+        bands = {key: plotted[c["planner"]].get(key) or band(c, key) for key in MYOPIA_MEAN}
         saved["planners"][c["planner"]] = {
             "runs": [{s: r["scalars"][s] for s in OLD_SCALARS} for r in c["runs"]],
-            "mean": {key: np.mean([x[key] for x in rs], axis=0).tolist() for key in MYOPIA_MEAN},
-            "std": {key: np.std([x[key] for x in rs], axis=0).tolist() for key in MYOPIA_MEAN}}
+            "mean": {key: b[0].tolist() for key, b in bands.items()},
+            "std": {key: b[1].tolist() for key, b in bands.items()}}
     return saved
 
 
