@@ -191,17 +191,19 @@ class DecMCTS:
                     self._rollout(trees[r], grids[r], known[r], caches[r], ctx)
                 if cfg.variant == "single":
                     own[r], q[r] = [trees[r].exploit_sequence()], np.ones(1)
-                    continue
-                if it % cfg.resample_every == 0:
-                    own[r] = trees[r].best_sequences(cfg.n_seq)
-                    q[r] = np.full(len(own[r]), 1.0 / len(own[r]))
-                q[r] = self._update_q(grids[r], own[r], q[r], known[r], caches[r], beta, trees[r].f_max)
+                else:
+                    if it % cfg.resample_every == 0:
+                        own[r] = trees[r].best_sequences(cfg.n_seq)
+                        q[r] = np.full(len(own[r]), 1.0 / len(own[r]))
+                    q[r] = self._update_q(grids[r], own[r], q[r], known[r], caches[r], beta, trees[r].f_max)
+                self._round_done(r, trees[r], known[r])
             for r in range(n):  # communication: the message replaces the receiver's copy
                 for j in nbrs[r]:
                     if cfg.drop == 0.0 or self.comm_rng.random() >= cfg.drop:
                         if r in known[j] and known[j][r][0] != own[r]:
                             caches[j].clear()  # cached entries used r's previous X_hat
                         known[j][r] = (own[r], q[r].copy())
+                        self._delivered(r, j)
             beta = cfg.beta0 if (it + 1) % cfg.resample_every == 0 else beta * cfg.cool
         self.last_q, self.last_trees = list(zip(own, q)), trees
         return [self._first_action(poses[r], own[r][int(np.argmax(q[r]))]) for r in range(n)]
@@ -216,6 +218,12 @@ class DecMCTS:
     def _rollout_context(self, r: int, known: dict) -> object:
         """Whatever agent r's rollouts of this round need besides the tree, passed on to
         _tree_reward (Dec-MCTS: nothing)."""
+
+    def _round_done(self, r: int, tree: Tree, known: dict) -> None:
+        """Called after agent r's rollouts of a round and its new intent (Dec-MCTS: nothing)."""
+
+    def _delivered(self, sender: int, receiver: int) -> None:
+        """Called when sender's message of this round reaches receiver (Dec-MCTS: nothing)."""
 
     def _tree_reward(self, tree: Tree, grid: PlanGrid, g: State, seq: list[Pose], ctx) -> float:
         """Utility of the tree part `seq` of a rollout; takes its looks on g in place."""

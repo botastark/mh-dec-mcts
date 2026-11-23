@@ -26,9 +26,10 @@ flown poses (starts excluded, they are not observed):
                   is still left: the team is busy but learning almost nothing (a trap).
     incomplete    runs that end with < 95 % of the field ever seen (part of the field abandoned)
 Output in results/myopia/<name>_<setting>/:
-    myopia.png     mission (MSE, entropy drop, altitude, coverage) and team (overlap, connectivity,
-                   misalignment, backfill) over time, mean +- s.e.
-    runs.json      per-run numbers and mean curves of every planner (for later figures)
+    myopia.png     mission (MSE, team-map entropy, altitude, coverage, planning time) and team
+                   (overlap, connectivity, misalignment, backfill) over time: per run averaged over
+                   the UAVs, then mean +- std over the runs (as in Pierdicca et al.'s figures)
+    runs.json      per-run numbers and mean / std curves of every planner (for later figures)
     runs.png       one dot per run: avg MSE of each planner vs greedy on the same run (below the
                    diagonal = better), final coverage, longest stall: shows rare failures that
                    averages hide
@@ -44,7 +45,7 @@ import argparse
 import json
 import time
 import warnings
-from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 
 import numpy as np
@@ -84,9 +85,10 @@ def one_run(cfg: dict, setting: dict, spec: str, run: int, steps: int, late: int
     sc = make_scenario(cfg, run)
     planner = setting["greedy"] if name == "greedy" else name
     pl = make_planner(planner, cfg, sc, setting["range"])
-    t0 = time.process_time()
+    t0, w0 = time.process_time(), time.perf_counter()
     res = run_multi(sc, pl, steps, mapping_weights(cfg), setting["sharing"], setting["range"])
     cpu = (time.process_time() - t0) / steps  # CPU seconds per step (whole team)
+    wall = time.perf_counter() - w0  # wall seconds of the run: > CPU when processes share cores
     lat = sc.lattice
     first = np.full(sc.grid.shape, -1, dtype=np.int32)
     col_first = np.full(sc.grid.shape[1], -1)  # step at which any cell of each column was first seen
@@ -116,11 +118,38 @@ def one_run(cfg: dict, setting: dict, spec: str, run: int, steps: int, late: int
     team_mse = np.mean(res.mse, axis=1)
     team_h = np.mean(res.entropy, axis=1)
     return {"coverage": cov, "backfill": back, "mse": team_mse.tolist(),
-            "entropy": team_h.tolist(), "h_drop": (-np.diff(team_h)).tolist(),
+            "entropy": team_h.tolist(), "team_entropy": list(res.team_entropy),
+            "plan": list(res.plan_time), "plan_per_step": float(np.mean(res.plan_time)),
             "alt": np.mean(res.altitude, axis=1).tolist(), "altitude": float(np.mean(res.altitude)),
             "overlap": overlap, "connected": connected, "misalignment": list(res.misalignment),
             "balance": float(credit.std() / max(credit.mean(), 1e-12)),
-            "stall": longest_stall(team_h, stall_rate), "first": first, "poses": res.poses, "cpu": cpu}
+            "stall": longest_stall(team_h, stall_rate), "first": first, "poses": res.poses, "cpu": cpu,
+            "wall": wall}
+
+
+def _hms(sec: float) -> str:
+    sec = int(round(sec))
+    return f"{sec // 3600}h{sec // 60 % 60:02d}m" if sec >= 3600 else f"{sec // 60}m{sec % 60:02d}s"
+
+
+def progress(done: dict, key: tuple[str, int], todo: list, jobs: int, elapsed: float,
+             trap: int) -> str:
+    """One line per finished run: count, elapsed, ETA, and the run's numbers. The ETA spreads the
+    remaining runs over the processes, each costing its planner's mean wall time per run so far
+    (planners differ a lot: H = 16 is ~5x H = 4). A planner with no finished run yet is costed at
+    the overall mean, which can be far too low, so it is named after the ETA as untimed."""
+    cost = {}  # planner -> wall times of its finished runs (one run = one process)
+    for (s, _), r in done.items():
+        cost.setdefault(s, []).append(r["wall"])
+    mean_all = float(np.mean([c for cs in cost.values() for c in cs]))
+    left = [k for k in todo if k not in done]
+    eta = sum(np.mean(cost[s]) if s in cost else mean_all for s, _ in left) / max(1, min(jobs, len(left)))
+    untimed = sorted({s for s, _ in left} - set(cost))
+    r = done[key]
+    stall = f"stall {r['stall']:3d}" + (" STALLED" if r["stall"] >= trap else "        ")
+    return (f"[{len(done):3d}/{len(todo)} {100 * len(done) / len(todo):3.0f}%  {_hms(elapsed)} elapsed,"
+            f" ~{_hms(eta)} left{' + untimed: ' + ', '.join(untimed) if untimed else ''}]  {key[0]} run {key[1]:2d}: avg MSE {np.mean(r['mse']):.4f},"
+            f" final {r['mse'][-1]:.4f}, {stall}, {r['cpu']:.2f} s/step")
 
 
 def main():
@@ -144,32 +173,43 @@ def main():
     cfg["comms"] = {"range": setting["range"], "sharing": setting["sharing"]}
     runs, steps = args.runs or cfg["run"]["runs"], args.steps or cfg["run"]["steps"]
 
+    todo = [(s, i) for i in range(runs) for s in args.planners]  # run by run: every planner timed early
+    print(f"{cfg['name']} {args.setting}: {len(args.planners)} planners x {runs} runs x {steps} steps, "
+          f"{len(todo)} runs on {args.jobs} processes", flush=True)
+    done: dict[tuple[str, int], dict] = {}
+    t_start = time.time()
     with ProcessPoolExecutor(args.jobs) as ex:
-        futs = {(s, i): ex.submit(one_run, cfg, setting, s, i, steps, args.late, args.stall_rate)
-                for s in args.planners for i in range(runs)}
-        res = {s: [futs[(s, i)].result() for i in range(runs)] for s in args.planners}
+        futs = {ex.submit(one_run, cfg, setting, s, i, steps, args.late, args.stall_rate): (s, i) for s, i in todo}
+        for fut in as_completed(futs):
+            key = futs[fut]
+            done[key] = fut.result()
+            print(progress(done, key, todo, args.jobs, time.time() - t_start, args.trap), flush=True)
+    res = {s: [done[(s, i)] for i in range(runs)] for s in args.planners}
 
     warnings.filterwarnings("ignore", category=RuntimeWarning)  # nan when a run never reaches a level
-    print(f"{cfg['name']} {args.setting}: {runs} runs x {steps} steps (mean +- s.e.; nan = never reached)")
+    print(f"{cfg['name']} {args.setting}: {runs} runs x {steps} steps (mean +- std over runs;"
+          f" vs the first planner: paired difference +- s.e.; nan = never reached)")
     ref = np.array([np.mean(r["mse"]) for r in res[args.planners[0]]])
     print(f"{'planner':>36s} {'steps to 80% cov':>17s} {'to 95%':>8s} {'backfill %':>13s} {'avg MSE':>9s}"
           f" {'vs ' + args.planners[0] + ' (paired)':>26s} {'final MSE':>10s} {'mean alt':>8s}"
-          f" {'stall':>11s} {'stalled':>8s} {'incomplete':>10s}")
+          f" {'stall':>11s} {'stalled':>8s} {'incomplete':>10s} {'plan s/step':>16s}")
     for s, rs in res.items():
         cov = np.array([r["coverage"] for r in rs])
         t80 = np.array([np.argmax(c >= 0.8) if c[-1] >= 0.8 else np.nan for c in cov])
         t95 = np.array([np.argmax(c >= 0.95) if c[-1] >= 0.95 else np.nan for c in cov])
         bf = np.array([r["backfill"][-1] for r in rs]) * 100
-        se = lambda a: np.nanstd(a) / np.sqrt(len(a))
+        sd = np.nanstd  # spread over the runs
+        se = lambda a: np.nanstd(a) / np.sqrt(len(a))  # only for the paired difference (a comparison)
         mse = np.array([r["mse"] for r in rs])
         d = mse.mean(1) - ref
-        print(f"{s:>36s} {np.nanmean(t80):9.0f} +- {se(t80):3.0f} {np.nanmean(t95):6.0f}"
-              f" {bf.mean():7.1f} +- {se(bf):3.1f} {mse.mean():9.4f}"
+        print(f"{s:>36s} {np.nanmean(t80):9.0f} +- {sd(t80):3.0f} {np.nanmean(t95):6.0f}"
+              f" {bf.mean():7.1f} +- {sd(bf):3.1f} {mse.mean():9.4f}"
               f" {d.mean():+.4f} +- {se(d):.4f} ({100 * d.mean() / ref.mean():+5.1f}%)"
               f" {mse[:, -1].mean():10.5f} {np.mean([r['altitude'] for r in rs]):7.1f}m"
-              f" {np.mean(st := [r['stall'] for r in rs]):5.1f} +- {se(np.array(st)):3.1f}"
+              f" {np.mean(st := [r['stall'] for r in rs]):5.1f} +- {sd(np.array(st)):3.1f}"
               f" {sum(d >= args.trap for d in st):5d}/{len(st)}"
-              f" {sum(r['coverage'][-1] < 0.95 for r in rs):7d}/{len(rs)}")
+              f" {sum(r['coverage'][-1] < 0.95 for r in rs):7d}/{len(rs)}"
+              f" {np.mean(pt := [r['plan_per_step'] for r in rs]):8.3f} +- {sd(np.array(pt)):.3f}")
 
     print(f"\n{'avg MSE per run':>36s} {'median':>8s} {'std':>8s} {'90th pct':>9s} {'worst':>8s}"
           f" {'stall >= trap':>14s} {'avg MSE of stalled runs':>24s}")
@@ -181,11 +221,10 @@ def main():
 
     print(f"\n{'team':>36s} {'overlap':>14s} {'connectivity':>14s} {'misalignment':>14s} {'balance':>12s}")
     for s, rs in res.items():
-        se = lambda a: np.std(a) / np.sqrt(len(a))
         cols = [[np.mean(r[k]) for r in rs] for k in ("overlap", "connected", "misalignment")]
         bal = [r["balance"] for r in rs]
-        print(f"{s:>36s} " + " ".join(f"{np.mean(c):7.3f} +-{se(c):5.3f}" for c in cols)
-              + f" {np.mean(bal):5.2f} +-{se(bal):4.2f}")
+        print(f"{s:>36s} " + " ".join(f"{np.mean(c):7.3f} +-{np.std(c):5.3f}" for c in cols)
+              + f" {np.mean(bal):5.2f} +-{np.std(bal):4.2f}")
 
     out = Path(args.out) / (args.tag or f"{cfg['name']}_{args.setting}")
     out.mkdir(parents=True, exist_ok=True)
@@ -201,8 +240,8 @@ def main():
 
 def save_runs(res, path, meta):
     """Everything later figures need, without the maps: per planner, per-run scalars and the
-    mean curves. Read back with json.load."""
-    keys = ("mse", "h_drop", "alt", "coverage", "overlap", "connected", "misalignment", "backfill")
+    mean and std curves over the runs. Read back with json.load."""
+    keys = ("mse", "team_entropy", "alt", "coverage", "plan", "overlap", "connected", "misalignment", "backfill")
     out = {"meta": meta, "planners": {}}
     for s, rs in res.items():
         cov = [r["coverage"] for r in rs]
@@ -211,33 +250,37 @@ def save_runs(res, path, meta):
                       "stall": int(r["stall"]), "final_cov": float(r["coverage"][-1]),
                       "t80": next((t for t, c in enumerate(c_) if c >= 0.8), None),
                       "t95": next((t for t, c in enumerate(c_) if c >= 0.95), None),
-                      "altitude": r["altitude"], "balance": r["balance"], "cpu_per_step": r["cpu"]}
+                      "altitude": r["altitude"], "balance": r["balance"], "cpu_per_step": r["cpu"],
+                      "plan_per_step": r["plan_per_step"]}
                      for r, c_ in zip(rs, cov)],
             "mean": {k: np.mean([r[k] for r in rs], axis=0).tolist() for k in keys},
+            "std": {k: np.std([r[k] for r in rs], axis=0).tolist() for k in keys},
         }
     path.write_text(json.dumps(out))
 
 
 def plot_curves(res, path, title):
-    """Row 1, the mission: MSE, entropy drop per step, altitude, coverage.
+    """Row 1, the mission: MSE, entropy of the team map, altitude, coverage, planning time.
     Row 2, the team: footprint overlap, connectivity, misalignment, backfill.
-    Lines = mean over runs, shade = +-1 s.e."""
+    Each run's curve is averaged over the UAVs; lines = mean over the runs, shade = +-1 std over
+    the runs (Pierdicca et al.'s convention, as in the reproduced paper figures)."""
     import matplotlib.pyplot as plt
 
-    panels = [("mse", "MSE"), ("h_drop", "Entropy drop per step (bits)"), ("alt", "Altitude (m)"),
-              ("coverage", "Coverage"), ("overlap", "Footprint overlap between UAVs"),
-              ("connected", "UAVs with a teammate in range"), ("misalignment", "Belief misalignment"),
-              ("backfill", "Backfill (fraction of field)")]
-    fig, axs = plt.subplots(2, 4, figsize=(20, 8))
+    panels = [("mse", "MSE"), ("team_entropy", "Entropy of the team map (bits)"), ("alt", "Altitude (m)"),
+              ("coverage", "Coverage"), ("plan", "Planning time per step (CPU s, team)"),
+              ("overlap", "Footprint overlap between UAVs"), ("connected", "UAVs with a teammate in range"),
+              ("misalignment", "Belief misalignment"), ("backfill", "Backfill (fraction of field)")]
+    fig, axs = plt.subplots(2, 5, figsize=(25, 8))
+    axs[1, 4].axis("off")
     for ax, (key, label) in zip(axs.flat, panels):
         for s, rs in res.items():
             a = np.array([r[key] for r in rs], dtype=float)
-            mu, se = a.mean(0), a.std(0) / np.sqrt(len(a))
+            mu, sd = a.mean(0), a.std(0)
             l, = ax.plot(mu, label=s)
-            ax.fill_between(np.arange(len(mu)), mu - se, mu + se, color=l.get_color(), alpha=0.2, lw=0)
+            ax.fill_between(np.arange(len(mu)), mu - sd, mu + sd, color=l.get_color(), alpha=0.2, lw=0)
         ax.set(xlabel="Step", ylabel=label)
         ax.grid(alpha=0.4)
-    axs[0, 1].set_yscale("symlog", linthresh=10)
+    axs[0, 4].set_yscale("log")  # greedy takes milliseconds, long horizons seconds
     axs[0, 0].legend(fontsize=8)
     fig.suptitle(title + "   (top: mission, bottom: team)")
     fig.tight_layout()
@@ -276,11 +319,27 @@ def plot_runs(res, path, title):
     plt.close(fig)
 
 
+UAV_HUES = ("#e41a1c", "#ff7f00", "#f0027f", "#9e9e9e", "#a6561d", "#ffd92f")  # red, orange, magenta, grey, brown, gold
+
+
+def path_cmap(hue: str):
+    """Light tint of `hue` (first steps) -> the hue -> a dark shade of it (last steps)."""
+    from matplotlib.colors import LinearSegmentedColormap, to_rgb
+
+    c = np.array(to_rgb(hue))
+    return LinearSegmentedColormap.from_list(hue, [c + 0.6 * (1 - c), c, 0.4 * c])
+
+
 def plot_first_seen(res, cfg, run, path, steps):
-    """Run `run` (the same field for every planner): step at which each cell was first seen."""
+    """Run `run` (the same field for every planner): step at which each cell was first seen, and
+    the UAV paths, light at the first steps to dark at the last, one hue per UAV."""
     import matplotlib.pyplot as plt
+    from matplotlib.collections import LineCollection
+    from matplotlib.colors import Normalize
+    from matplotlib.lines import Line2D
 
     sc = make_scenario(cfg, run)
+    norm = Normalize(0, steps)  # one step scale for every UAV and planner
     fig, axs = plt.subplots(len(res), 1, figsize=(8, 3.8 * len(res)), squeeze=False, layout="constrained")
     for ax, (s, rs) in zip(axs[:, 0], res.items()):
         r = rs[run]
@@ -288,15 +347,24 @@ def plot_first_seen(res, cfg, run, path, steps):
         first[first < 0] = np.nan  # never seen: white
         im = ax.imshow(first, cmap="viridis", vmin=0, vmax=steps, origin="upper")
         ax.contour(sc.truth, levels=[0.5], colors="k", linewidths=0.4, alpha=0.5)  # ground-truth clusters
-        for poses in r["poses"]:
-            ij = np.array([sc.grid.xy_to_ij(*sc.lattice.xyz(p)[:2]) for p in poses])
-            ax.plot(ij[:, 1], ij[:, 0], color="red", lw=0.8)
-            ax.plot(ij[0, 1], ij[0, 0], "wo", ms=5)
+        for a, poses in enumerate(r["poses"]):
+            cmap = path_cmap(UAV_HUES[a % len(UAV_HUES)])
+            ij = np.array([sc.grid.xy_to_ij(*sc.lattice.xyz(p)[:2]) for p in poses], dtype=float)
+            xy = ij[:, ::-1]  # (column, row) = (x, y) on the image
+            lc = LineCollection(np.stack([xy[:-1], xy[1:]], axis=1), cmap=cmap, norm=norm, linewidths=1.1)
+            lc.set_array(np.arange(len(xy) - 1))  # segment t: step t -> t + 1
+            ax.add_collection(lc)
+            ax.plot(*xy[0], "o", ms=5, mfc=cmap(0.0), mec="k", mew=0.6)  # start
         ax.set(title=f"{s}: coverage {r['coverage'][-1]:.2f}, avg MSE {np.mean(r['mse']):.4f}",
                xticks=[], yticks=[], xlim=(-0.5, first.shape[1] - 0.5), ylim=(first.shape[0] - 0.5, -0.5))
         fig.colorbar(im, ax=ax, shrink=0.9)
+    n_uav = len(next(iter(res.values()))[run]["poses"])
+    if n_uav > 1:
+        axs[0, 0].legend(handles=[Line2D([], [], color=UAV_HUES[a % len(UAV_HUES)], lw=2, label=f"UAV {a}")
+                                  for a in range(n_uav)], loc="upper left", fontsize=7, ncol=min(n_uav, 4))
     fig.suptitle(f"run {run} (worst for the first planner): step at which each cell was first seen\n"
-                 "white = never seen, black lines = ground-truth cluster edges")
+                 "white = never seen, black lines = ground-truth cluster edges\n"
+                 "paths: light at the start (o) to dark at the end" + (", one hue per UAV" if n_uav > 1 else ""))
     fig.savefig(path, dpi=150)
     plt.close(fig)
 

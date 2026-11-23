@@ -1,11 +1,13 @@
-"""MH-MCTS, step 1: regions; step 2: mission time (g2); step 3: low-level planner with g2."""
+"""MH-MCTS, step 1: regions; step 2: mission time (g2); step 3: low-level planner with g2;
+step 5: the high-level planner (HLP)."""
 
 from typing import Any
 
 import numpy as np
 
 from mh_dec_mcts.planning.dec_mcts import DecMCTS, DecMCTSConfig
-from mh_dec_mcts.planning.mh_mcts import MHConfig, MHMCTS, MissionTime, Regions, look_rate, make_mh_mcts, split_overrides
+from mh_dec_mcts.planning.mh_mcts import (MHConfig, MHMCTS, MissionTime, Regions, RegionTree, look_rate,
+                                          make_mh_mcts, split_overrides)
 from mh_dec_mcts.planning.objective import PlanGrid
 from mh_dec_mcts.scenario import make_scenario
 from mh_dec_mcts.sensing.lattice import Pose
@@ -108,6 +110,43 @@ def test_open_regions_and_the_look_rate():
     assert all(x > 0 for x in rates) and rates[0] < max(rates)  # low looks see little ground
 
 
+
+def test_an_order_is_followed_and_closed_regions_are_skipped():
+    r, T = mission(lam=1e12)  # pure travel
+    E = np.ones(r.n)
+    op = frozenset({1, 3, 7})
+    # nearest-first from the SW corner: 1, 3, 7; the order 7, 1, 3 flies to the far corner first
+    nearest = T(E, op, [(0, (0, 0))])
+    assert np.isclose(T(E, op, [(0, (0, 0))], [(1, 3, 7)]), nearest)
+    far_first = r.dist((0, 0), 7) + r.dist(r.center[7], 1) + r.dist(r.center[1], 3)
+    assert np.isclose(T(E, op, [(0, (0, 0))], [(7, 1, 3)]), far_first) and far_first > nearest
+    # regions of the order that are closed are skipped; open ones missing from it come last, nearest-first
+    assert np.isclose(T(E, op, [(0, (0, 0))], [(5, 7, 6)]), r.dist((0, 0), 7) + r.dist(r.center[7], 3) + r.dist(r.center[3], 1))
+
+
+def test_orders_divide_the_regions_between_uavs():
+    r, T = mission(lam=1.0)
+    E = np.zeros(r.n)
+    E[[0, 3]] = 8.0  # 8 steps of work each
+    west, east = (0, 0), (3 * r.per + r.per, 0)  # SW corner, SE corner
+    # each UAV takes the region at its own end: both finish after 8 steps of work
+    split = T(E, frozenset({0, 3}), [(0, west), (0, east)], [(0, 3), (3, 0)])
+    assert split == 8.0
+    # both orders start at the far region: the UAVs cross the field
+    crossed = T(E, frozenset({0, 3}), [(0, west), (0, east)], [(3, 0), (0, 3)])
+    assert crossed > split
+
+
+def test_single_uav_tours_are_cached_per_order():
+    r, T = mission(lam=1.0)
+    E = np.ones(r.n)
+    op = frozenset(range(r.n))
+    a = T(E, op, [(0, (0, 0))])
+    assert len(T._tours) == 1 and T(E * 2, op, [(0, (0, 0))]) == a + float(np.sum(T.works(E * 2) - T.works(E)))
+    T(E, op, [(0, (0, 0))], [(7,)])  # another order: its own entry
+    assert len(T._tours) == 2
+
+
 # ------------------------------------------------------------------ step 3: low-level planner with g2
 FAST: dict[str, Any] = {"horizon": 3, "iterations": 5, "rollouts": 6, "stride": 8}
 
@@ -154,3 +193,85 @@ def test_spec_overrides_go_to_their_config_sections():
     mcts, mh = split_overrides({"horizon": 4, "rollout": "greedy", "tile": 12.5, "g2_weight": 0.0})
     assert mcts == {"horizon": 4, "rollout": "greedy"} and mh == {"tile": 12.5, "g2_weight": 0.0}
     assert split_overrides({}) == ({}, {})
+
+
+# ------------------------------------------------------------------ step 5: high-level planner
+def test_hl_tree_finds_a_shorter_tour_than_nearest_first():
+    """Bottom row of 4 tiles, UAV just inside tile 1: nearest-first goes 1, 0 (tie with 2, lower
+    id), back across to 2, 3: 10 steps. Starting with 0 then sweeping east is 7."""
+    r, T = mission(lam=1e12)  # work ~ 0: the order only changes travel
+    E, op, start = np.ones(r.n), frozenset({0, 1, 2, 3}), (5, 0)
+    assert np.isclose(T(E, op, [(0, start)]), 10)
+    hl = RegionTree(op, gamma=1.0, cp=0.5)
+    rng = np.random.default_rng(0)
+    for _ in range(200):
+        node = hl.select_expand(rng)
+        order = hl.complete(node, rng, r, start)
+        if not node.seq:
+            node.seq = order
+        hl.backprop(node, -T(E, op, [(0, start)], [order]))
+    best = hl.exploit_sequence()
+    assert sorted(best) == [0, 1, 2, 3] and np.isclose(T(E, op, [(0, start)], [best]), 7)
+
+
+def test_hl_tree_completion_policies():
+    r, _ = mission()
+    hl = RegionTree(frozenset({0, 1, 2, 3}), 1.0, 0.5)
+    rng = np.random.default_rng(1)
+    assert hl.complete(hl.root, rng, r, (0, 0)) == (0, 1, 2, 3)  # nearest-first from the SW corner
+    node = hl.select_expand(rng)  # one region chosen by the tree, the rest nearest-first from it
+    assert hl.complete(node, rng, r, (0, 0))[0] == node.pose
+    assert sorted(hl.complete(node, rng, None, (0, 0))) == [0, 1, 2, 3]  # random completion
+
+
+def test_without_hl_rollouts_it_is_the_g2_only_planner():
+    """hl_rollouts = 0: no HL tree, every UAV nearest-first; an HL tree changes the orders only."""
+    sc = make_scenario({**CFG, "agents": {"n": 2, "start": "legacy"}}, 0)
+    beliefs = [np.full(sc.grid.shape, 0.5)] * 2
+    off = MHMCTS(sc.lattice, sc.rates, DecMCTSConfig(**FAST), MHConfig(tile=12.5, hl_rollouts=0), seed=0)
+    off.plan(beliefs, sc.starts, [[1], [0]])
+    assert off.hl_trees == {} and off.last_hl == [None, None]
+    on = MHMCTS(sc.lattice, sc.rates, DecMCTSConfig(**FAST), MHConfig(tile=12.5), seed=0)
+    on.plan(beliefs, sc.starts, [[1], [0]])
+    for r in range(2):
+        assert sorted(on.last_hl[r]) == sorted(on.last_open[r])  # a full order of the open regions
+        assert on._hl_known[1 - r][r] == on.last_hl[r]  # ... received by the teammate in range
+
+
+def test_hl_tree_is_kept_across_steps_while_regions_only_close():
+    sc = make_scenario(CFG, 0)
+    b = np.full(sc.grid.shape, 0.5)
+    mh = MHMCTS(sc.lattice, sc.rates, DecMCTSConfig(**FAST), MHConfig(tile=12.5), seed=0)
+    mh.plan([b], [sc.starts[0]], [[]])
+    tree, size = mh.hl_trees[0], len(mh.hl_trees[0].nodes)
+    mh.plan([b], [sc.starts[0]], [[]])
+    assert mh.hl_trees[0] is tree and len(tree.nodes) > size  # same tree, grown further
+    b2 = b.copy()
+    b2[: b.shape[0] // 2, : b.shape[1] // 4] = 0.001  # one tile (north-west) becomes known
+    mh.plan([b2], [sc.starts[0]], [[]])
+    assert mh.hl_trees[0] is tree and tree.open == mh.last_open[0] == tree.key - {4}  # kept, tile dropped
+    assert 4 not in mh.last_hl[0] and sorted(mh.last_hl[0]) == sorted(tree.open)
+    b3 = b.copy()
+    b3[:, : 3 * b.shape[1] // 4] = 0.001  # 6 of 8 tiles known: fewer than half left
+    mh.plan([b3], [sc.starts[0]], [[]])
+    assert mh.hl_trees[0] is not tree and mh.hl_trees[0].key == mh.last_open[0]  # rebuilt
+
+
+def test_closed_regions_leave_the_hl_search():
+    r, T = mission(lam=1e12)
+    op = frozenset({0, 1, 2, 3})
+    hl = RegionTree(op, 1.0, 0.5)
+    rng = np.random.default_rng(0)
+    for _ in range(40):
+        node = hl.select_expand(rng)
+        order = hl.complete(node, rng, r, (0, 0))
+        node.seq = node.seq or order
+        hl.backprop(node, -T(np.ones(r.n), op, [(0, (0, 0))], [order]))
+    hl.close(frozenset({1, 3}))
+    for _ in range(40):
+        node = hl.select_expand(rng)
+        assert set(hl.prefix(node)) <= {1, 3}  # never descends into closed regions
+        assert sorted(hl.complete(node, rng, r, (0, 0))) == [1, 3]
+        node.seq = node.seq or hl.complete(node, rng, r, (0, 0))
+        hl.backprop(node, 0.0)
+    assert sorted(hl.exploit_sequence()) == [1, 3]

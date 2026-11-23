@@ -1,7 +1,8 @@
 """Multi-agent run (paper Sec. III-D/E, Fig. 5), following Pierdicca's simulate.py.
 
 Per step:
-    1. metrics: per-agent entropy / MSE / altitude, misalignment between agents
+    1. metrics: per-agent entropy / MSE / altitude, misalignment between agents, entropy of the
+       team map (every agent's observations in one map)
     2. plan: any planner of planning/planners.py (make_planner), given the neighbours at the
        current poses (Dec-MCTS exchanges its plans with them)
     3. move all agents
@@ -10,6 +11,7 @@ Per step:
     6. news sharing and fusion (none / BS / BM)
 """
 
+import time
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -29,14 +31,21 @@ class MultiResult:
     mse: list[list[float]] = field(default_factory=list)
     altitude: list[list[float]] = field(default_factory=list)
     misalignment: list[float] = field(default_factory=list)  # [step]
+    team_entropy: list[float] = field(default_factory=list)  # [step], of the team map (see run_multi)
+    plan_time: list[float] = field(default_factory=list)  # [step], CPU seconds in planner.plan (whole team)
     beliefs: list[np.ndarray] | None = None  # final, per agent
 
 
 def run_multi(sc: Scenario, planner, n_steps: int, weights: str = "adaptive", sharing: str = "none",
               range_: int | None = None) -> MultiResult:
-    """planner: planning.planners.make_planner(name, cfg, sc, range_), fresh for this run."""
+    """planner: planning.planners.make_planner(name, cfg, sc, range_), fresh for this run.
+
+    Besides the agents' own beliefs, a team map gets every agent's observation each step (Bayes,
+    then LBP, as the agents): what one map of all the team saw would know, whatever the comms.
+    One agent: its own belief. It only feeds the team_entropy metric."""
     lat, n = sc.lattice, len(sc.starts)
     beliefs = [np.full(sc.grid.shape, 0.5) for _ in range(n)]
+    team = np.full(sc.grid.shape, 0.5)
     news = News(sharing, n, sc.grid.shape)
     poses = list(sc.starts)
     res = MultiResult(poses=[[p] for p in poses])
@@ -46,8 +55,11 @@ def run_multi(sc: Scenario, planner, n_steps: int, weights: str = "adaptive", sh
         res.mse.append([mse(b, sc.truth) for b in beliefs])
         res.altitude.append([lat.xyz(p)[2] for p in poses])
         res.misalignment.append(misalignment(beliefs))
+        res.team_entropy.append(total_entropy(team))
         # 2. plan, 3. move
+        t0 = time.process_time()
         actions = planner.plan(beliefs, poses, neighbours(poses, range_))
+        res.plan_time.append(time.process_time() - t0)
         poses = [lat.step(p, a) for p, a in zip(poses, actions)]
         for a in range(n):
             res.poses[a].append(poses[a])
@@ -60,9 +72,11 @@ def run_multi(sc: Scenario, planner, n_steps: int, weights: str = "adaptive", sh
         # 5. own beliefs (Bayes for all agents, then LBP, as in his update_map_beliefs)
         for a in range(n):
             bayes_update(beliefs[a], bounds[a], zs[a], *rates[a])
+            bayes_update(team, bounds[a], zs[a], *rates[a])
         for a, psi in enumerate(psis):
             if psi is not None:  # weights "none": Bayes only
                 lbp_update(beliefs[a], bounds[a], psi)
+                lbp_update(team, bounds[a], psi)
         # 6. news
         news.step(beliefs, bounds, zs, rates, psis, nbrs)
     res.beliefs = beliefs
