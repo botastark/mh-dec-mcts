@@ -13,7 +13,6 @@ from mh_dec_mcts.planning.planners import PLANNERS, make_planner
 from mh_dec_mcts.scenario import make_scenario
 from mh_dec_mcts.sensing.lattice import Pose
 from mh_dec_mcts.sim.multi import run_multi
-from mh_dec_mcts.sim.single import run_single
 
 CFG: dict[str, Any] = {"name": "t", "grid": {"size_x": 25, "size_y": 25, "cell": 0.125}, "lattice": {"xy_step": None},
                        "field": {"type": "gaussian", "r": 3}, "agents": {"n": 2, "start": "random"},
@@ -147,10 +146,10 @@ def test_lost_messages_equal_no_communication():
 
 # ------------------------------------------------------------------ wiring
 @pytest.mark.parametrize("name", PLANNERS)
-def test_every_planner_runs_in_the_single_and_multi_loops(name):
-    sc = scen(1)
-    res = run_single(sc, make_planner(name, CFG, sc), 3, "adaptive")
-    assert len(res.poses) == 4
+def test_every_planner_runs_alone_and_in_a_team(name):
+    sc = scen(1)  # one UAV: the loop behind Pierdicca's Figs. 3 and 4 (the old sim.single, identical)
+    res = run_multi(sc, make_planner(name, CFG, sc), 3, "adaptive")
+    assert len(res.poses) == 1 and len(res.poses[0]) == 4
     sc = scen(3)
     res = run_multi(sc, make_planner(name, CFG, sc, 5), 3, "adaptive", "BM", 5)
     assert all(len(p) == 4 for p in res.poses)

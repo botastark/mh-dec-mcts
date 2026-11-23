@@ -1,7 +1,7 @@
 # swarm.yaml on a non-square field: everything the same (4 UAVs from the corners, adaptive weights,
 # r = 5, the two settings, Dec-MCTS settings) except the field, 100 m x 50 m instead of 50 x 50.
 # Same lattice spacing (3.125 m): 33 x 17 waypoints x 6 altitudes.
-#   python scripts/myopia.py configs/swarm_rect.yaml --setting IGd_BM_R5 \
+#   python scripts/run.py configs/swarm_rect.yaml --setting IGd_BM_R5 \
 #       --planners greedy decmcts:horizon=2 decmcts:horizon=8,rollout=greedy
 name: swarm_rect
 seed: 42

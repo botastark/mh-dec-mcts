@@ -26,7 +26,7 @@ def parse_spec(spec: str) -> tuple[str, dict]:
     return name, {k: yaml.safe_load(v) for k, v in (kv.split("=", 1) for kv in rest.split(",") if kv)}
 
 
-parse = parse_spec  # old name (scripts/myopia.py)
+parse = parse_spec  # old name
 
 
 def longest_stall(h: np.ndarray, rate: float, left: float = 0.2) -> int:

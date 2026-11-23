@@ -1,7 +1,7 @@
 # swarm_rect.yaml on a 4x larger field: 200 m x 100 m (800 x 1600 cells), same lattice spacing
 # (65 x 33 waypoints x 6 altitudes), same 4 UAVs from the corners and 100 steps. Far more ground
 # per UAV than one footprint or an 8-step plan can reach. Everything else as swarm_rect.yaml.
-#   python scripts/myopia.py configs/swarm_big.yaml --setting IGd_BM_R5 --runs 8 --jobs 8 \
+#   python scripts/run.py configs/swarm_big.yaml --setting IGd_BM_R5 --runs 8 --jobs 8 \
 #       --planners greedy decmcts:horizon=2 decmcts:horizon=8,rollout=greedy decmcts:horizon=16,rollout=greedy
 name: swarm_big
 seed: 42

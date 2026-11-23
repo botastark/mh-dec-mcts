@@ -7,7 +7,7 @@
 # i.e. with everyone in IG_BS_Rinf and with the R = 5 neighbours in IGd_BM_R5.
 # Shared, as in legacy: Gaussian field r = 5, 4 UAVs from the corners, adaptive weights,
 # 100 steps x 20 runs. Our own seeding and correct adaptive weights (compat null).
-#   python scripts/myopia.py configs/swarm.yaml --setting IGd_BM_R5 --planners greedy decmcts
+#   python scripts/run.py configs/swarm.yaml --setting IGd_BM_R5 --planners greedy decmcts
 name: swarm
 seed: 42
 compat: null

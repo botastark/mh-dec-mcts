@@ -1,4 +1,4 @@
-"""Planner-comparison figures from a run.py result (the figures of the old myopia.py).
+"""Planner-comparison figures from a run.py result.
 
     python scripts/plot_mission.py results/myopia/swarm_rect_IGd_BM_R5
 
@@ -12,7 +12,7 @@ One set of figures per team setting (n, sharing, range) of the result:
     firstseen.png  (needs run.py --save-poses) the run where the first planner did worst (lowest
                    final coverage, then highest MSE), every planner on that same field: step at
                    which each cell was first seen, and the paths (light = start, dark = end).
-Also works on an old myopia runs.json (mission curves without std, runs.png).
+Also works on an old runs.json of a planner comparison (mission curves without std, runs.png).
 """
 
 import argparse
@@ -166,7 +166,7 @@ def _pose(p):
 
 def main(argv: list[str] | None = None) -> None:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    ap.add_argument("folder", help="a run.py output folder (results.json), or an old myopia folder (runs.json)")
+    ap.add_argument("folder", help="a run.py output folder (results.json), or an old planner-comparison folder (runs.json)")
     ap.add_argument("--out", help="output folder (default: the result folder)")
     args = ap.parse_args(argv)
     folder = Path(args.folder)

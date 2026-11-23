@@ -66,7 +66,7 @@ quantities are averaged over the UAVs of the run (Pierdicca's convention).
 
 ## Scalars (one value per run)
 
-Names as in the old `runs.json` of `myopia.py`:
+Names as in the old `runs.json` of the former planner-comparison script (`results/myopia`):
 `avg_mse` (mean of `mse` over the steps), `final_mse`, `stall` (longest stretch of steps the
 team's entropy falls by < `stall_rate` of what is left while > 20 % remains), `final_cov`,
 `t80` / `t95` (first step with `coverage` >= 0.8 / 0.95, or null), `altitude` (mean over steps
@@ -84,7 +84,8 @@ and `wall` (wall seconds of the run). The three timings differ between otherwise
 
 ## Old results
 
-`load_results` also reads the `runs.json` of the old `myopia.py` / `horizon_sweep.py`. It returns
+`load_results` also reads the old `runs.json` of planner comparisons and horizon sweeps (also
+when renamed, e.g. `runs_rect_n1.json`). It returns
 it in the same shape (`schema` 0), with `curves = None` for every run and the stored mean (and
 std, if present) curves as `mean_curves` / `std_curves` of each condition. Summary plots and
 tables that only need scalars work on both.

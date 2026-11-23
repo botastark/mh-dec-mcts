@@ -88,7 +88,7 @@ def ms(mu_sd) -> dict:
 
 
 def run_single_case(tmp: Path, name, config, extra, runs, steps) -> dict:
-    """Old run_single.py: curves.json (mean / std over runs per planner of entropy, MSE, coverage,
+    """The former single-UAV runner: curves.json (mean / std over runs per planner of entropy, MSE, coverage,
     altitude; coverage = Pierdicca's) and run0.npz (run-0 poses per planner, truth)."""
     extra = list(extra)
     planners = ["ig", "random", "sweep"]
@@ -115,7 +115,7 @@ def run_single_case(tmp: Path, name, config, extra, runs, steps) -> dict:
 
 
 def run_multi_case(tmp: Path) -> dict:
-    """Old run_multi.py: one JSON per condition, mean / std over runs of MSE, entropy, altitude
+    """The former Fig. 5 runner: one JSON per condition, mean / std over runs of MSE, entropy, altitude
     (averaged over the UAVs) and misalignment."""
     config, planners, sharing, ranges, ns, runs, steps = MULTI_CASE
     res, _ = run_py(tmp, config, ["--planners", *planners, "--sharing", *sharing, "--ranges", *map(str, ranges),
@@ -138,7 +138,7 @@ ONE_RUN_CURVES = ("mse", "entropy", "team_entropy", "alt", "coverage", "misalign
 
 
 def as_runs_json(res: dict, n: int) -> dict:
-    """results.json -> what the old myopia.py saved as runs.json."""
+    """results.json -> what the former planner-comparison script saved as runs.json."""
     m = res["meta"]
     saved = {"meta": {"config": m["config"], "setting": m["setting"], "runs": m["runs"], "steps": m["steps"],
                       "n": n, "trap": m["trap"]}, "planners": {}}
@@ -156,7 +156,7 @@ def as_runs_json(res: dict, n: int) -> dict:
 
 
 def run_myopia_case(tmp: Path, name, config, setting, n, runs, steps) -> dict:
-    """Old myopia.py: runs.json (per-run scalars, mean / std curves) and every per-run curve and
+    """The former planner-comparison script: runs.json (per-run scalars, mean / std curves) and every per-run curve and
     scalar of one_run (with the poses and the first-seen map)."""
     res, arrays = run_py(tmp, config, ["--setting", setting, "--n", str(n), "--runs", str(runs),
                                        "--steps", str(steps), "--save-poses", "--planners", *MYOPIA_SPECS])

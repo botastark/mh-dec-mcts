@@ -1,5 +1,5 @@
 # Paper Fig. 5 as Pierdicca ran it: N UAVs at random start waypoints (lowest altitude),
-# adaptive weights, r = 5, 20 runs x 100 steps. scripts/run_multi.py loops over
+# adaptive weights, r = 5, 20 runs x 100 steps. scripts/fig5.sh runs (scripts/run.py) the grid
 # planner {ig, igd} x sharing {none, BS, BM} x range {5, 16} x N {1, 2, 4, 8}.
 name: pierdicca_fig5
 compat: pierdicca

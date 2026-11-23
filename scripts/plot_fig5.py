@@ -30,7 +30,7 @@ METRICS = ("mse", "altitude", "misalignment")
 
 
 def key(planner: str, sharing: str, range_, n: int) -> str:
-    return f"{planner}_{sharing}_R{range_}_N{n}"  # the old run_multi.py file names
+    return f"{planner}_{sharing}_R{range_}_N{n}"  # the file names of the former Fig. 5 runner
 
 
 def arrays(results: dict) -> dict[str, dict[str, tuple[np.ndarray, np.ndarray]]]:

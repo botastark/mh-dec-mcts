@@ -51,7 +51,7 @@ MAPS = ("first", "truth")  # large per-run arrays, kept only with --save-poses
 # ------------------------------------------------------------------ grid
 def grid(cfg: dict, planners: list[str], ns: list[int], setting: str | None,
          sharings: list[str], ranges: list) -> list[dict]:
-    """Conditions in order planner, sharing, range, n (as the old run_multi.py)."""
+    """Conditions in order planner, sharing, range, n (as the former Fig. 5 runner)."""
     if setting is not None:
         s = cfg["settings"][setting]
         combos, greedy = [(s["sharing"], s["range"])], s["greedy"]
