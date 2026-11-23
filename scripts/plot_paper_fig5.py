@@ -97,7 +97,7 @@ def main():
           [Line2D([], [], color=plt.get_cmap("Greys")(0.35 + 0.65 * i / 2), label=str(n)) for i, n in enumerate(NS)]
     h_r = [Line2D([], [], color="k", ls="--", label="5"), Line2D([], [], color="k", ls="-", label="$\\infty$")]
     for c, name in enumerate(TITLES.get(p, p) for p in planners):
-        h_s = [Line2D([], [], color=SHARING[s][1], label=name + SHARING[s][2]) for s in SHARING]
+        h_s = [Line2D([], [], color=SHARING[s][1], label=f"{name}{SHARING[s][2]}") for s in SHARING]
         leg = axs[0, c].legend(handles=h_s, loc="upper right", fontsize=7)
         axs[0, c].add_artist(leg)
     leg = axs[0, 0].legend(handles=h_n, title="N", loc="upper center", fontsize=7, title_fontsize=7)
