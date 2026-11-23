@@ -11,7 +11,7 @@ UAV the comms setting does not matter). Planners: greedy and Dec-MCTS with horiz
     python scripts/horizon_sweep.py --runs 2 --steps 10 --horizons 2 4 --jobs 2   # smoke test
         (then delete results/horizon_sweep/ before the real run, or pass --force)
 
-Raw results: results/horizon_sweep/<condition>/ (myopia.py output, incl. runs.json).
+Raw results: results/horizon_sweep/<condition>/results.json (older sweeps: runs.json, also read).
 Paper figures: paper/figures/
     horizon_sweep.pdf / .png   per condition (columns) vs horizon: avg MSE and final MSE relative
                                to greedy (paired, mean +- 95 % CI), stalled runs, CPU per step;
@@ -21,12 +21,13 @@ Paper figures: paper/figures/
 
 import argparse
 import csv
-import json
 import subprocess
 import sys
 from pathlib import Path
 
 import numpy as np
+
+from mh_dec_mcts.experiment import load_results, result_file
 
 CONDITIONS = {  # name: (config, setting, UAVs, steps, label)
     "square_n1": ("configs/swarm.yaml", "IGd_BM_R5", 1, 300, "square 50x50 m, 1 UAV"),
@@ -39,13 +40,17 @@ RAW = Path("results/horizon_sweep")
 FIGS = Path("paper/figures")
 
 
+def done(name: str) -> bool:
+    return result_file(RAW / name) is not None
+
+
 def spec(h: int) -> str:
     return f"decmcts:horizon={h},rollout=greedy"
 
 
 def run(conditions, horizons, jobs, runs, steps_override, force):
     for name, (config, setting, n, steps, _) in conditions.items():
-        if (RAW / name / "runs.json").exists() and not force:
+        if done(name) and not force:
             print(f"{name}: already done (--force to rerun)")
             continue
         cmd = [sys.executable, "scripts/myopia.py", config, "--setting", setting, "--n", str(n),
@@ -61,19 +66,19 @@ def summarise(conditions, horizons):
     """rows of: condition, planner, horizon, metric means and 95 % CIs (paired vs greedy)."""
     rows = []
     for name in conditions:
-        f = RAW / name / "runs.json"
-        if not f.exists():
+        if not done(name):
             print(f"{name}: no results yet, skipped")
             continue
-        d = json.loads(f.read_text())
-        g = d["planners"]["greedy"]["runs"]
+        d = load_results(RAW / name)  # results.json, or the runs.json of older sweeps
+        planners = {c["planner"]: [r["scalars"] for r in c["runs"]] for c in d["conditions"]}
+        g = planners["greedy"]
         g_avg = np.array([r["avg_mse"] for r in g])
         g_fin = np.array([r["final_mse"] for r in g])
         trap = d["meta"]["trap"]
         for p, h in [("greedy", 0)] + [(spec(h), h) for h in horizons]:
-            if p not in d["planners"]:
+            if p not in planners:
                 continue
-            rs = d["planners"][p]["runs"]
+            rs = planners[p]
             avg = np.array([r["avg_mse"] for r in rs])
             fin = np.array([r["final_mse"] for r in rs])
             d_avg = 100 * (avg - g_avg) / g_avg.mean()  # % of greedy's mean, paired per run

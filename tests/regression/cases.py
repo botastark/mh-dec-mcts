@@ -9,10 +9,10 @@ Timings (CPU / wall seconds, planning time) differ from run to run and are left 
 """
 
 import json
+import math
 import os
 import subprocess
 import sys
-from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 
 import numpy as np
@@ -51,67 +51,104 @@ def strip(x):
     return x
 
 
-def poses(path) -> list:
-    return [[p.ix, p.iy, p.k] for p in path]
-
-
 def sh(args, cwd=REPO):
     subprocess.run([sys.executable, *args], cwd=cwd, env=ENV, check=True, stdout=subprocess.DEVNULL)
 
 
-# ------------------------------------------------------------------ runners (today: the old scripts)
+# ------------------------------------------------------------------ runners
+# single / multi / myopia cases: scripts/run.py (T3), converted to what the old scripts saved.
+def run_py(tmp: Path, config, args: list[str]) -> tuple[dict, dict]:
+    """scripts/run.py into a fresh folder: (results, arrays)."""
+    sys.path.insert(0, str(REPO / "src"))
+    from mh_dec_mcts.experiment import load_arrays, load_results
+
+    out = tmp / "run"
+    sh(["scripts/run.py", config, *args, "--jobs", "8", "--out", str(out)])
+    (folder,) = list(out.iterdir())
+    res, arrays = load_results(folder), load_arrays(folder)
+    for f in folder.iterdir():
+        f.unlink()
+    folder.rmdir()
+    return res, arrays
+
+
+def _stats(curves: list, key: str) -> dict:
+    a = [c[key] for c in curves]
+    return {"mean": np.mean(a, 0).tolist(), "std": np.std(a, 0).tolist()}
+
+
 def run_single_case(tmp: Path, name, config, extra, runs, steps) -> dict:
-    out = tmp / "single" / name
-    sh(["scripts/run_single.py", config, *extra, "--runs", str(runs), "--steps", str(steps), "--out", str(out)])
-    (folder,) = [d for d in out.iterdir() if d.is_dir()]
-    curves = json.loads((folder / "curves.json").read_text())
-    run0 = np.load(folder / "run0.npz")
-    return strip({"folder": folder.name, "planners": curves["planners"], "curves": curves["curves"],
-                  "run0": {k: run0[k].tolist() for k in sorted(run0.files) if k != "truth"},
-                  "truth_sum": int(run0["truth"].sum())})
+    """Old run_single.py: curves.json (mean / std over runs per planner of entropy, MSE, coverage,
+    altitude; coverage = Pierdicca's) and run0.npz (run-0 poses per planner, truth)."""
+    extra = list(extra)
+    planners = ["ig", "random", "sweep"]
+    if "--planners" in extra:
+        k = extra.index("--planners")
+        planners, extra = [extra[k + 1]], extra[:k] + extra[k + 2:]
+    res, arrays = run_py(tmp, config, ["--planners", *planners, *extra, "--runs", str(runs),
+                                       "--steps", str(steps), "--save-poses"])
+    names = {"entropy": "entropy", "mse": "mse", "coverage": "coverage_paper", "altitude": "alt"}
+    curves, run0 = {}, {}
+    for k, c in enumerate(res["conditions"]):
+        rs = [r["curves"] for r in c["runs"]]
+        curves[c["planner"]] = {m: _stats(rs, key) for m, key in names.items()}
+        run0[f"poses_{c['planner']}"] = arrays[f"c{k}_r0_poses"][0].tolist()
+    cfg = res["meta"]["config_resolved"]
+    tag = cfg["name"] + (f"_r{cfg['field']['r']:g}" if "r" in cfg["field"] else "") + f"_{cfg['run']['weights']}"
+    return strip({"folder": tag, "planners": planners, "curves": curves,
+                  "run0": dict(sorted(run0.items())), "truth_sum": int(arrays["truth_r0"].sum())})
 
 
 def run_multi_case(tmp: Path) -> dict:
+    """Old run_multi.py: one JSON per condition, mean / std over runs of MSE, entropy, altitude
+    (averaged over the UAVs) and misalignment."""
     config, planners, sharing, ranges, ns, runs, steps = MULTI_CASE
-    out = tmp / "multi"
-    sh(["scripts/run_multi.py", config, "--planners", *planners, "--sharing", *sharing,
-        "--ranges", *map(str, ranges), "--n", *map(str, ns), "--runs", str(runs), "--steps", str(steps),
-        "--out", str(out)])
-    (folder,) = list(out.iterdir())
-    return strip({f.stem: json.loads(f.read_text())["curves"] for f in sorted(folder.glob("*.json"))})
+    res, _ = run_py(tmp, config, ["--planners", *planners, "--sharing", *sharing, "--ranges", *map(str, ranges),
+                                  "--n", *map(str, ns), "--runs", str(runs), "--steps", str(steps)])
+    names = {"mse": "mse", "entropy": "entropy", "altitude": "alt", "misalignment": "misalignment"}
+    out = {}
+    for c in res["conditions"]:
+        rs = [r["curves"] for r in c["runs"]]
+        out[f"{c['planner']}_{c['sharing']}_R{c['range']}_N{c['n']}"] = {m: _stats(rs, k) for m, k in names.items()}
+    return strip(dict(sorted(out.items())))
+
+
+MYOPIA_MEAN = ("mse", "team_entropy", "alt", "coverage", "plan", "overlap", "connected", "misalignment", "backfill")
+OLD_SCALARS = ("avg_mse", "final_mse", "stall", "final_cov", "t80", "t95", "altitude", "balance")
+ONE_RUN_CURVES = ("mse", "entropy", "team_entropy", "alt", "coverage", "misalignment", "overlap", "connected",
+                  "backfill")
+
+
+def as_runs_json(res: dict, n: int) -> dict:
+    """results.json -> what the old myopia.py saved as runs.json."""
+    m = res["meta"]
+    saved = {"meta": {"config": m["config"], "setting": m["setting"], "runs": m["runs"], "steps": m["steps"],
+                      "n": n, "trap": m["trap"]}, "planners": {}}
+    for c in res["conditions"]:
+        rs = [r["curves"] for r in c["runs"]]
+        saved["planners"][c["planner"]] = {
+            "runs": [{s: r["scalars"][s] for s in OLD_SCALARS} for r in c["runs"]],
+            "mean": {key: np.mean([x[key] for x in rs], axis=0).tolist() for key in MYOPIA_MEAN},
+            "std": {key: np.std([x[key] for x in rs], axis=0).tolist() for key in MYOPIA_MEAN}}
+    return saved
 
 
 def run_myopia_case(tmp: Path, name, config, setting, n, runs, steps) -> dict:
-    out = tmp / "myopia"
-    sh(["scripts/myopia.py", config, "--setting", setting, "--n", str(n), "--runs", str(runs),
-        "--steps", str(steps), "--jobs", "8", "--out", str(out), "--tag", name, "--planners", *MYOPIA_SPECS])
-    saved = json.loads((out / name / "runs.json").read_text())
-    return strip({"runs_json": saved, "one_run": myopia_one_runs(config, setting, n, runs, steps)})
-
-
-def _one_run_job(config, setting_name, n, spec, i, steps):
-    from mh_dec_mcts.scenario import load_config
-
-    sys.path.insert(0, str(REPO / "scripts"))
-    from myopia import one_run  # T1 moves it to mh_dec_mcts.experiment
-
-    cfg = load_config(str(REPO / config), agents={"n": n})
-    setting = cfg["settings"][setting_name]
-    cfg["comms"] = {"range": setting["range"], "sharing": setting["sharing"]}
-    r = one_run(cfg, setting, spec, i, steps, 10, 0.01)
-    first = r.pop("first")
-    r["first_sum"] = int(first.astype(np.int64).sum())
-    r["first_seen"] = int((first >= 0).sum())
-    r["poses"] = [poses(p) for p in r["poses"]]
-    return strip(r)
-
-
-def myopia_one_runs(config, setting, n, runs, steps) -> dict:
-    """Every per-run curve and scalar of one_run (runs.json keeps only scalars and means)."""
-    with ProcessPoolExecutor(8) as ex:
-        futs = {f"{s}|{i}": ex.submit(_one_run_job, config, setting, n, s, i, steps)
-                for s in MYOPIA_SPECS for i in range(runs)}
-        return {k: f.result() for k, f in futs.items()}
+    """Old myopia.py: runs.json (per-run scalars, mean / std curves) and every per-run curve and
+    scalar of one_run (with the poses and the first-seen map)."""
+    res, arrays = run_py(tmp, config, ["--setting", setting, "--n", str(n), "--runs", str(runs),
+                                       "--steps", str(steps), "--save-poses", "--planners", *MYOPIA_SPECS])
+    one = {}
+    for k, c in enumerate(res["conditions"]):
+        for r in c["runs"]:
+            i = r["run"]
+            first = arrays[f"c{k}_r{i}_first"]
+            one[f"{c['planner']}|{i}"] = {**{key: r["curves"][key] for key in ONE_RUN_CURVES},
+                                         **{key: r["scalars"][key] for key in ("altitude", "balance", "stall")},
+                                         "first_sum": int(first.astype(np.int64).sum()),
+                                         "first_seen": int((first >= 0).sum()),
+                                         "poses": arrays[f"c{k}_r{i}_poses"].tolist()}
+    return strip({"runs_json": as_runs_json(res, n), "one_run": one})
 
 
 def run_tune_case(tmp: Path) -> dict:
@@ -131,7 +168,10 @@ def run_sweep_case(tmp: Path) -> dict:
         (work / d).symlink_to(REPO / d)
     sh([str(REPO / "scripts/horizon_sweep.py"), "--conditions", *conditions, "--horizons", *map(str, horizons),
         "--runs", str(runs), "--steps", str(steps), "--jobs", "8"], cwd=work)
-    raw = {c: json.loads((work / "results/horizon_sweep" / c / "runs.json").read_text()) for c in conditions}
+    from mh_dec_mcts.experiment import load_results
+
+    n = {"square_n1": 1, "square_n4": 4, "rect_n1": 1, "rect_n4": 4}
+    raw = {c: as_runs_json(load_results(work / "results/horizon_sweep" / c), n[c]) for c in conditions}
     import csv
 
     with open(work / "paper/figures/horizon_sweep.csv") as f:
@@ -164,6 +204,6 @@ def diff(a, b, path="") -> list[str]:
         for i, (x, y) in enumerate(zip(a, b)):
             out += diff(x, y, f"{path}[{i}]")
         return out
-    if isinstance(a, float) and isinstance(b, float) and a != a and b != b:
+    if isinstance(a, float) and isinstance(b, float) and math.isnan(a) and math.isnan(b):
         return []
     return [] if a == b and type(a) is type(b) else [f"{path}: {a!r} != {b!r}"]

@@ -16,6 +16,7 @@ from mh_dec_mcts.comms.network import neighbours
 from mh_dec_mcts.planning.mh_mcts import split_overrides
 from mh_dec_mcts.planning.planners import make_planner
 from mh_dec_mcts.scenario import make_scenario, mapping_weights
+from mh_dec_mcts.sim.metrics import coverage
 from mh_dec_mcts.sim.multi import run_multi
 
 
@@ -41,12 +42,30 @@ def longest_stall(h: np.ndarray, rate: float, left: float = 0.2) -> int:
     return best
 
 
+def paper_coverage(lat, shape: tuple[int, int], poses: list, steps: int) -> list[float]:
+    """Coverage as in Pierdicca's figures (sim/single.py): at step t, the fraction of the field
+    inside a footprint of any UAV at any of its poses 0..t (start included), recorded before the
+    step's move. one_run's `coverage` instead counts the flown poses only, after the move."""
+    seen = np.zeros(shape, dtype=bool)
+    out = []
+    for t in range(steps):
+        for path in poses:
+            i0, i1, j0, j1 = lat.footprint(path[t])
+            seen[i0:i1, j0:j1] = True
+        out.append(coverage(seen))
+    return out
+
+
 def one_run(cfg: dict, setting: dict, spec: str, run: int, steps: int, late: int,
-            stall_rate: float = 0.01) -> dict:
+            stall_rate: float = 0.01, streams: dict | None = None) -> dict:
+    """One run of planner `spec` in a team setting {"sharing", "range", "greedy"}: per-step curves
+    (averaged over the UAVs where per UAV), per-run scalars, the poses, the first-seen map and the
+    ground truth. streams: the experiment's generators for compat pierdicca (make_streams), the
+    runs of one experiment built in order 0, 1, 2, ... with the same object."""
     name, over = parse(spec)
     mcts_over, mh_over = split_overrides(over)  # e.g. mhmcts:horizon=4,tile=12.5
     cfg = {**cfg, "mcts": {**cfg["mcts"], **mcts_over}, "mh": {**cfg.get("mh", {}), **mh_over}}
-    sc = make_scenario(cfg, run)
+    sc = make_scenario(cfg, run, streams)
     planner = setting["greedy"] if name == "greedy" else name
     pl = make_planner(planner, cfg, sc, setting["range"])
     t0, w0 = time.process_time(), time.perf_counter()
@@ -88,7 +107,8 @@ def one_run(cfg: dict, setting: dict, spec: str, run: int, steps: int, late: int
             "overlap": overlap, "connected": connected, "misalignment": list(res.misalignment),
             "balance": float(credit.std() / max(credit.mean(), 1e-12)),
             "stall": longest_stall(team_h, stall_rate), "first": first, "poses": res.poses, "cpu": cpu,
-            "wall": wall}
+            "wall": wall, "coverage_paper": paper_coverage(lat, sc.grid.shape, res.poses, steps),
+            "truth": sc.truth}
 
 
 # ------------------------------------------------------------------ result format (docs/results_format.md)
@@ -138,6 +158,18 @@ def save_results(folder, meta: dict, conditions: list[dict], arrays: dict | None
     return folder / "results.json"
 
 
+def result_file(folder) -> Path | None:
+    """The results file of a folder: results.json, else an old runs.json (or a single renamed
+    runs*.json, e.g. runs_rect_n1.json), else None."""
+    folder = Path(folder)
+    if (folder / "results.json").exists():
+        return folder / "results.json"
+    if (folder / "runs.json").exists():
+        return folder / "runs.json"
+    old = sorted(folder.glob("runs*.json"))
+    return old[0] if len(old) == 1 else None
+
+
 def load_results(path) -> dict:
     """A results.json (or the folder holding it) in the result format. Also reads the old
     myopia / horizon-sweep runs.json: per-run scalars and mean (and std) curves, no per-run
@@ -145,7 +177,9 @@ def load_results(path) -> dict:
     std_curves of each condition."""
     path = Path(path)
     if path.is_dir():
-        path = path / "results.json" if (path / "results.json").exists() else path / "runs.json"
+        path = result_file(path)
+        if path is None:
+            raise FileNotFoundError(f"no results.json or runs*.json in {path}")
     d = json.loads(path.read_text())
     if "schema" in d:
         return d

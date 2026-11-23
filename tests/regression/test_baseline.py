@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from cases import MYOPIA_CASES, SINGLE_CASES, collect, diff  # noqa: E402
+from cases import MYOPIA_CASES, SINGLE_CASES, collect, diff
 
 BASELINE = Path(__file__).resolve().parent / "baseline"
 CASES = [*SINGLE_CASES, "multi_fig5", *MYOPIA_CASES, "tune", "horizon_sweep"]

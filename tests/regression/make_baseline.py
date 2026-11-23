@@ -13,7 +13,7 @@ import tempfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from cases import collect  # noqa: E402
+from cases import collect
 
 BASELINE = Path(__file__).resolve().parent / "baseline"
 
