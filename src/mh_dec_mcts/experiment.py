@@ -5,7 +5,9 @@ A planner spec is a planner name with optional overrides: "greedy" (the setting'
 MHConfig (tile, g2_weight, ...) go to the config section `mh`, the others to `mcts`.
 """
 
+import json
 import time
+from pathlib import Path
 
 import numpy as np
 import yaml
@@ -87,3 +89,101 @@ def one_run(cfg: dict, setting: dict, spec: str, run: int, steps: int, late: int
             "balance": float(credit.std() / max(credit.mean(), 1e-12)),
             "stall": longest_stall(team_h, stall_rate), "first": first, "poses": res.poses, "cpu": cpu,
             "wall": wall}
+
+
+# ------------------------------------------------------------------ result format (docs/results_format.md)
+SCHEMA = 1
+CURVES = ("mse", "entropy", "team_entropy", "alt", "coverage", "coverage_paper", "plan", "misalignment",
+          "overlap", "connected", "backfill")  # per-step curves of a run, as one_run returns them
+
+
+def condition_id(spec: str, n: int, sharing: str | None, range_: int | None, setting: str | None) -> str:
+    return f"{spec}|n={n}|sharing={sharing}|range={range_}|setting={setting}"
+
+
+def run_record(r: dict, run: int, run_seed: int) -> dict:
+    """One run of one_run in the result format: per-step curves and per-run scalars. The scalars
+    keep the names (and the computation) of the old myopia runs.json."""
+    cov = r["coverage"]
+    return {"run": run, "run_seed": run_seed,
+            "curves": {k: r[k] for k in CURVES if k in r},
+            "scalars": {"avg_mse": float(np.mean(r["mse"])), "final_mse": float(r["mse"][-1]),
+                        "stall": int(r["stall"]), "final_cov": float(cov[-1]),
+                        "t80": next((t for t, c in enumerate(cov) if c >= 0.8), None),
+                        "t95": next((t for t, c in enumerate(cov) if c >= 0.95), None),
+                        "altitude": r["altitude"], "balance": r["balance"], "cpu_per_step": r["cpu"],
+                        "plan_per_step": r["plan_per_step"], "wall": r["wall"]}}
+
+
+def make_meta(config: str, config_resolved: dict, argv: list[str]) -> dict:
+    import datetime
+    import subprocess
+
+    try:
+        commit = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True,
+                                check=True).stdout.strip()
+    except (OSError, subprocess.CalledProcessError):
+        commit = None
+    return {"config": config, "config_resolved": config_resolved, "git_commit": commit,
+            "created": datetime.datetime.now().isoformat(timespec="seconds"), "command": list(argv)}
+
+
+def save_results(folder, meta: dict, conditions: list[dict], arrays: dict | None = None) -> Path:
+    """results.json (+ results.npz with `arrays`, e.g. poses and first-seen maps) in `folder`."""
+    folder = Path(folder)
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / "results.json").write_text(json.dumps({"schema": SCHEMA, "meta": meta, "conditions": conditions}))
+    if arrays:
+        np.savez_compressed(folder / "results.npz", **arrays)
+    return folder / "results.json"
+
+
+def load_results(path) -> dict:
+    """A results.json (or the folder holding it) in the result format. Also reads the old
+    myopia / horizon-sweep runs.json: per-run scalars and mean (and std) curves, no per-run
+    curves; returned in the same shape with curves = None and the old curves as mean_curves /
+    std_curves of each condition."""
+    path = Path(path)
+    if path.is_dir():
+        path = path / "results.json" if (path / "results.json").exists() else path / "runs.json"
+    d = json.loads(path.read_text())
+    if "schema" in d:
+        return d
+    m = d["meta"]
+    conds = []
+    for spec, p in d["planners"].items():
+        conds.append({"id": condition_id(spec, m.get("n"), None, None, m.get("setting")), "planner": spec,
+                      "n": m.get("n"), "sharing": None, "range": None, "setting": m.get("setting"),
+                      "steps": m.get("steps"),
+                      "runs": [{"run": i, "run_seed": None, "curves": None, "scalars": s}
+                               for i, s in enumerate(p["runs"])],
+                      "mean_curves": p.get("mean"), "std_curves": p.get("std")})
+    meta = {"config": m.get("config"), "config_resolved": None, "git_commit": None, "created": None,
+            "command": None, "old_format": str(path), **{k: v for k, v in m.items() if k != "config"}}
+    return {"schema": 0, "meta": meta, "conditions": conds}
+
+
+def load_arrays(path) -> dict:
+    """results.npz next to a results.json (poses, first-seen maps, truth), {} if absent."""
+    path = Path(path)
+    f = (path if path.is_dir() else path.parent) / "results.npz"
+    if not f.exists():
+        return {}
+    with np.load(f) as z:
+        return {k: z[k] for k in z.files}
+
+
+# ------------------------------------------------------------------ statistics over runs
+def curve_stats(curves: list) -> tuple[np.ndarray, np.ndarray]:
+    """Mean and std (ddof 0, as Pierdicca) over runs of per-step curves (runs x steps)."""
+    return np.mean(curves, 0), np.std(curves, 0)
+
+
+def se(x) -> float:
+    """Standard error over runs: std / sqrt(runs), NaN-aware (runs that never reach a level)."""
+    return np.nanstd(x) / np.sqrt(len(x))
+
+
+def paired_diff(x, ref) -> np.ndarray:
+    """Per-run differences against a reference planner on the same runs (paired design)."""
+    return np.asarray(x) - np.asarray(ref)
