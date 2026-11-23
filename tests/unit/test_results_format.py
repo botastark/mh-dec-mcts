@@ -66,3 +66,10 @@ def test_statistics_helpers():
     np.testing.assert_array_equal(sd, [1.0, 2.0])  # ddof 0
     assert se([1.0, 3.0]) == 1.0 / np.sqrt(2)
     np.testing.assert_array_equal(paired_diff([1.0, 2.0], [0.5, 2.5]), [0.5, -0.5])
+
+
+def test_a_renamed_old_runs_json_is_found(tmp_path):
+    old = {"meta": {"config": "c.yaml", "setting": "S", "runs": 1, "steps": 2, "n": 4, "trap": 15},
+           "planners": {"greedy": {"runs": [{"avg_mse": 0.3}], "mean": {"mse": [0.25, 0.2]}}}}
+    (tmp_path / "runs_rect_n4.json").write_text(json.dumps(old))
+    assert load_results(tmp_path)["conditions"][0]["runs"][0]["scalars"]["avg_mse"] == 0.3

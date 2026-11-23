@@ -54,13 +54,13 @@ def grid(cfg: dict, planners: list[str], ns: list[int], setting: str | None,
     """Conditions in order planner, sharing, range, n (as the former Fig. 5 runner)."""
     if setting is not None:
         s = cfg["settings"][setting]
-        combos, greedy = [(s["sharing"], s["range"])], s["greedy"]
+        combos, greedy, one = [(s["sharing"], s["range"])], s["greedy"], None
     else:
         combos, greedy = list(itertools.product(sharings, ranges)), None
-    one = ("none" if "none" in sharings else sharings[0], ranges[0])  # n = 1: nothing to share
+        one = ("none" if "none" in sharings else sharings[0], ranges[0])  # n = 1: nothing to share
     out = []
     for spec, (sharing, range_), n in itertools.product(planners, combos, ns):
-        if n == 1 and setting is None and (sharing, range_) != one:
+        if n == 1 and one is not None and (sharing, range_) != one:
             continue
         if spec == "greedy" and greedy is None:
             raise SystemExit("planner 'greedy' needs --setting (its IG / IGd)")
