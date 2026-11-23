@@ -6,7 +6,7 @@ Conventions (identical to legacy ``uav_camera.Camera``):
   - ``centered=False``: (x, y) = (0, 0) is the bottom-left corner, i.e. cell (rows, 0).
   - ``xy_to_ij`` rounds half to even (``np.rint``), exactly like legacy ``int(np.round(.))``.
     Results may equal ``rows``/``cols`` on the far edge: they are valid slice ends but not
-    valid cell indices; use ``in_bounds`` / ``clip_ij`` when you need a cell.
+    valid cell indices.
 
 All conversions accept scalars or numpy arrays.
 """
@@ -16,7 +16,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import numpy as np
-from numpy.typing import ArrayLike
 
 
 @dataclass(frozen=True)
@@ -101,34 +100,3 @@ class Grid:
             j = x / self.cell
             i = self.rows - y / self.cell
         return int(np.round(i)), int(np.round(j))
-
-
-    # ----------------------------------------------------------------- bounds
-    def in_bounds(self, i: ArrayLike, j: ArrayLike):
-        """True where (i, j) is a valid cell index."""
-        i = np.asarray(i)
-        j = np.asarray(j)
-        ok = (i >= 0) & (i < self.rows) & (j >= 0) & (j < self.cols)
-        return bool(ok) if ok.ndim == 0 else ok
-
-    def clip_ij(self, i: ArrayLike, j: ArrayLike):
-        """Clamp (i, j) to the nearest valid cell index."""
-        i = np.clip(np.asarray(i), 0, self.rows - 1)
-        j = np.clip(np.asarray(j), 0, self.cols - 1)
-        if i.ndim == 0:
-            return int(i), int(j)
-        return i.astype(int), j.astype(int)
-
-    def clip_bounds(self, imin: int, imax: int, jmin: int, jmax: int) -> tuple[int, int, int, int]:
-        """Clamp a half-open box [imin, imax) x [jmin, jmax) to the grid (slice semantics)."""
-        imin, imax = max(0, min(imin, self.rows)), max(0, min(imax, self.rows))
-        jmin, jmax = max(0, min(jmin, self.cols)), max(0, min(jmax, self.cols))
-        return imin, imax, jmin, jmax
-
-    def contains_xy(self, x: ArrayLike, y: ArrayLike):
-        """True where the metric point lies inside the field (edges included)."""
-        x = np.asarray(x, dtype=float)
-        y = np.asarray(y, dtype=float)
-        (x0, x1), (y0, y1) = self.x_range, self.y_range
-        ok = (x >= x0) & (x <= x1) & (y >= y0) & (y <= y1)
-        return bool(ok) if ok.ndim == 0 else ok

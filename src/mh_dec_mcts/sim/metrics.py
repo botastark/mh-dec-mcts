@@ -19,5 +19,7 @@ def coverage(seen: np.ndarray) -> float:
     return float(seen.mean())
 
 
-# TODO multi-agent: belief misalignment (paper Fig. 5). Not defined in the paper or the
-# legacy repo; take the definition from Pierdicca's Precision-Agriculture-Dev code.
+def misalignment(beliefs: list[np.ndarray]) -> float:
+    """Disagreement between the agents' maps (paper Fig. 5): the variance across agents of
+    each cell's belief, averaged over the field."""
+    return float(np.var(np.stack(beliefs, axis=2), axis=2).mean())

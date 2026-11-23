@@ -51,7 +51,7 @@ import numpy as np
 import yaml
 
 from mh_dec_mcts.comms.network import neighbours
-from mh_dec_mcts.planning.dec_mcts import make_dec_mcts
+from mh_dec_mcts.planning.planners import make_planner
 from mh_dec_mcts.scenario import load_config, make_scenario, mapping_weights
 from mh_dec_mcts.sim.multi import run_multi
 
@@ -81,9 +81,9 @@ def one_run(cfg: dict, setting: dict, spec: str, run: int, steps: int, late: int
     cfg = {**cfg, "mcts": {**cfg["mcts"], **over}}
     sc = make_scenario(cfg, run)
     planner = setting["greedy"] if name == "greedy" else name
-    dec = make_dec_mcts(cfg, sc) if planner == "decmcts" else None
+    pl = make_planner(planner, cfg, sc, setting["range"])
     t0 = time.process_time()
-    res = run_multi(sc, planner, steps, mapping_weights(cfg), setting["sharing"], setting["range"], 1e-4, dec)
+    res = run_multi(sc, pl, steps, mapping_weights(cfg), setting["sharing"], setting["range"])
     cpu = (time.process_time() - t0) / steps  # CPU seconds per step (whole team)
     lat = sc.lattice
     first = np.full(sc.grid.shape, -1, dtype=np.int32)

@@ -7,7 +7,7 @@ belief changed). Planning runs `iterations` rounds of Algorithm 1; in each round
     1. grows its own tree with `rollouts` D-UCT rollouts (Alg. 2). Each rollout samples one plan
        per known teammate from that teammate's (X_hat, q) and scores the agent's own sequence
        (tree prefix + default policy) with the local utility f_r = entropy drop of its looks
-       after the teammates' looks (planning/objective.py: sampled world, mapper-matched update);
+       after the teammates' looks (planning/objective.py: sampled world, Bayes update);
     2. every `resample_every` rounds re-selects X_hat_r = the initial rollout sequences of the
        `n_seq` tree nodes with the best discounted mean, resetting q_r to uniform and beta (Sec. 4.4);
     3. updates q_r by Alg. 3, expectations over `n_samples` sampled teammate plans and worlds;
@@ -21,16 +21,17 @@ first move of that path. Cheaper (no Alg. 3 evaluations); use gamma close to 1 (
 Teammates never heard from (out of range, or lost messages) are ignored: their plans count as
 empty (the paper's "default policy"). With one agent this is plain D-UCT MCTS.
 
-Interface: plan(beliefs, poses, nbrs) -> one action per agent, and the single-agent
-choose(belief, pose, visited, rng). Build it with make_dec_mcts(cfg, scenario).
+Interface: plan(beliefs, poses, nbrs) -> one action per agent (planners.py), and the single-agent
+choose(belief, pose). Build it for a scenario with planners.make_planner("decmcts", cfg, sc).
 """
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 import math
 
 import numpy as np
 
-from mh_dec_mcts.planning.objective import PlanGrid, State, lbp_psi
+from mh_dec_mcts.planning.objective import PlanGrid, State
 from mh_dec_mcts.sensing.lattice import Lattice, Pose
 from mh_dec_mcts.sensing.sensor import SensorRates
 
@@ -54,7 +55,6 @@ class DecMCTSConfig:
     reward_discount: float = 1.0  # weight of the t-th footprint along a sequence
     stride: int = 8  # plan on every stride-th cell (objective.PlanGrid)
     drop: float = 0.0  # probability that a message is lost
-    lbp_model: bool = False  # planner's belief update: Bayes only, as greedy IG (False) or + LBP model
     share_plans: bool = True  # False: no plan exchange, every agent plans alone (ablation)
     variant: str = "distribution"  # distribution: Best et al. 2019 (X_hat + q, Alg. 3, argmax q)
     #                                single: MH-MCTS paper's simplification, one intent = the tree's
@@ -94,8 +94,7 @@ class Tree:
         if node.depth >= self.cfg.horizon:
             return node  # full-length leaf: re-evaluate it
         a = node.untried.pop(rng.integers(len(node.untried)))
-        pose = self.lat.move(node.pose, a)
-        assert pose is not None
+        pose = self.lat.step(node.pose, a)
         child = Node(pose, node.depth + 1, node, self.lat.admissible(pose))
         node.children[a] = child
         self.nodes.append(child)
@@ -104,9 +103,14 @@ class Tree:
     def _best_child(self, node: Node) -> Node:
         """eq. 2-3, 7: argmax of discounted mean + 2 Cp sqrt(log t_parent / t_j)."""
         t = max(sum(c.n for c in node.children.values()), 1.0)
+
         def ucb(c: Node) -> float:
-            return c.mean / self.f_max + 2 * self.cfg.cp * math.sqrt(math.log(t) / max(c.n, 1e-12))
+            return self.score(c.mean) + 2 * self.cfg.cp * math.sqrt(math.log(t) / max(c.n, 1e-12))
         return max(node.children.values(), key=ucb)
+
+    def score(self, mean: float) -> float:
+        """A discounted mean on the [0, 1] scale UCB needs: divided by the best reward seen."""
+        return mean / self.f_max
 
     def prefix(self, node: Node) -> list[Pose]:
         out = []
@@ -152,21 +156,19 @@ class DecMCTS:
     message loss) comes from its own generator, so the scenario's observation and tie-break
     streams are left exactly as the other planners use them."""
 
-    def __init__(self, lat: Lattice, rates: SensorRates, cfg: DecMCTSConfig | None = None, seed=0,
-                 psi=None):
-        """psi: per-level LBP weight of the mapper (objective.lbp_psi); None = Bayes only."""
+    def __init__(self, lat: Lattice, rates: SensorRates, cfg: DecMCTSConfig | None = None,
+                 seed: int | Sequence[int] = 0):
         self.lat, self.rates, self.cfg = lat, rates, cfg or DecMCTSConfig()
-        self.psi = psi if self.cfg.lbp_model else None
         self.rng = np.random.default_rng(seed)
         self.comm_rng = np.random.default_rng(self.rng.integers(2**62))  # message loss only
         self.last_q: list[tuple[list[Seq], np.ndarray]] = []  # per agent, for inspection
         self.last_trees: list[Tree] = []
 
-    # ---------- single agent (run_single) ----------
+    # ---------- single agent ----------
     def choose(self, belief, pose, visited=None, rng=None) -> str:
         return self.plan([belief], [pose], [[]])[0]
 
-    # ---------- team (run_multi) ----------
+    # ---------- team (planners.py interface) ----------
     def plan(self, beliefs, poses, nbrs) -> list[str]:
         """beliefs, poses: per agent; nbrs[r]: who hears agent r (comms.network.neighbours)."""
         cfg, n = self.cfg, len(poses)
@@ -174,8 +176,9 @@ class DecMCTS:
             raise ValueError(f"unknown Dec-MCTS variant '{cfg.variant}'")
         if not cfg.share_plans:
             nbrs = [[] for _ in range(n)]
-        grids = [PlanGrid(b, self.lat, self.rates, cfg.stride, self.psi) for b in beliefs]
-        trees = [Tree(self.lat, p, cfg) for p in poses]
+        grids = [PlanGrid(b, self.lat, self.rates, cfg.stride) for b in beliefs]
+        self._start_plan(grids)
+        trees = [self._new_tree(p) for p in poses]
         own: list[list[Seq]] = [[] for _ in range(n)]  # X_hat_r
         q: list[np.ndarray] = [np.zeros(0) for _ in range(n)]
         known: list[dict[int, tuple[list[Seq], np.ndarray]]] = [{} for _ in range(n)]  # r's copy of others
@@ -183,8 +186,9 @@ class DecMCTS:
         beta = cfg.beta0
         for it in range(cfg.iterations):
             for r in range(n):
+                ctx = self._rollout_context(r, known[r])
                 for _ in range(cfg.rollouts):
-                    self._rollout(trees[r], grids[r], known[r], caches[r])
+                    self._rollout(trees[r], grids[r], known[r], caches[r], ctx)
                 if cfg.variant == "single":
                     own[r], q[r] = [trees[r].exploit_sequence()], np.ones(1)
                     continue
@@ -201,6 +205,21 @@ class DecMCTS:
             beta = cfg.beta0 if (it + 1) % cfg.resample_every == 0 else beta * cfg.cool
         self.last_q, self.last_trees = list(zip(own, q)), trees
         return [self._first_action(poses[r], own[r][int(np.argmax(q[r]))]) for r in range(n)]
+
+    # ---------- hooks (planners built on Dec-MCTS override these; see mh_mcts.MHMCTS) ----------
+    def _start_plan(self, grids: list[PlanGrid]) -> None:
+        """Called once per plan() with every agent's planning grid, before any tree is grown."""
+
+    def _new_tree(self, root: Pose) -> Tree:
+        return Tree(self.lat, root, self.cfg)
+
+    def _rollout_context(self, r: int, known: dict) -> object:
+        """Whatever agent r's rollouts of this round need besides the tree, passed on to
+        _tree_reward (Dec-MCTS: nothing)."""
+
+    def _tree_reward(self, tree: Tree, grid: PlanGrid, g: State, seq: list[Pose], ctx) -> float:
+        """Utility of the tree part `seq` of a rollout; takes its looks on g in place."""
+        return grid.sequence_gain(g, seq, self.rng, self.cfg.reward_discount)
 
     # ---------- pieces ----------
     def _sample_others(self, known) -> tuple:
@@ -219,13 +238,13 @@ class DecMCTS:
             cache[("grid", sample)] = st
         return st.copy()
 
-    def _rollout(self, tree: Tree, grid: PlanGrid, known, cache) -> None:
+    def _rollout(self, tree: Tree, grid: PlanGrid, known, cache, ctx=None) -> None:
         """Alg. 2 lines 3-8: tree prefix, then the default policy up to the horizon; the
         utility is accumulated on the grid after the sampled teammate plans."""
         node = tree.select_expand(self.rng)
         g = self._grid_after(grid, known, cache, self._sample_others(known))
         seq = tree.prefix(node)
-        f = grid.sequence_gain(g, seq, self.rng, self.cfg.reward_discount)
+        f = self._tree_reward(tree, grid, g, seq, ctx)
         w = self.cfg.reward_discount ** len(seq)
         pose = node.pose
         for _ in range(self.cfg.horizon - node.depth):  # default policy
@@ -261,12 +280,3 @@ class DecMCTS:
                 return a
         raise RuntimeError(f"sequence {seq[:2]} does not start next to {pose}")
 
-
-def make_dec_mcts(cfg: dict, sc) -> DecMCTS:
-    """Dec-MCTS for a scenario: config section `mcts`, planning rng seeded from the run, and the
-    mapper's LBP weights measured on a calibration field (scenario.calibration_field)."""
-    from mh_dec_mcts.scenario import calibration_field, mapping_weights
-
-    psi = lbp_psi(sc.lattice, sc.rates, mapping_weights(cfg), calibration_field(cfg, sc.grid),
-                  np.random.default_rng(999))
-    return DecMCTS(sc.lattice, sc.rates, DecMCTSConfig(**cfg.get("mcts", {})), [sc.run_seed, 7], psi)

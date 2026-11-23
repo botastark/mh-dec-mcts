@@ -1,23 +1,24 @@
 """Dec-MCTS: planning objective, D-UCT tree, Alg. 3, team planning, wiring. Fast settings only."""
 
+from typing import Any
+
 import numpy as np
 import pytest
 
 from mh_dec_mcts.comms.network import neighbours
-from mh_dec_mcts.mapping.belief import update
-from mh_dec_mcts.planning.dec_mcts import DecMCTS, DecMCTSConfig, Tree, make_dec_mcts
-from mh_dec_mcts.planning.information import entropy, info_gain
-from mh_dec_mcts.planning.objective import PlanGrid, lbp_psi
-from mh_dec_mcts.scenario import calibration_field, make_scenario
+from mh_dec_mcts.planning.dec_mcts import DecMCTS, DecMCTSConfig, Tree
+from mh_dec_mcts.planning.information import info_gain
+from mh_dec_mcts.planning.objective import PlanGrid
+from mh_dec_mcts.planning.planners import PLANNERS, make_planner
+from mh_dec_mcts.scenario import make_scenario
 from mh_dec_mcts.sensing.lattice import Pose
-from mh_dec_mcts.sensing.sensor import observe
 from mh_dec_mcts.sim.multi import run_multi
 from mh_dec_mcts.sim.single import run_single
 
-CFG = {"name": "t", "grid": {"size_x": 25, "size_y": 25, "cell": 0.125}, "lattice": {"xy_step": None},
-       "field": {"type": "gaussian", "r": 3}, "agents": {"n": 2, "start": "random"},
-       "run": {"weights": "adaptive"},
-       "mcts": {"horizon": 3, "iterations": 6, "rollouts": 5, "n_seq": 5, "resample_every": 3, "stride": 8}}
+CFG: dict[str, Any] = {"name": "t", "grid": {"size_x": 25, "size_y": 25, "cell": 0.125}, "lattice": {"xy_step": None},
+                       "field": {"type": "gaussian", "r": 3}, "agents": {"n": 2, "start": "random"},
+                       "run": {"weights": "adaptive"},
+                       "mcts": {"horizon": 3, "iterations": 6, "rollouts": 5, "n_seq": 5, "resample_every": 3, "stride": 8}}
 FAST = DecMCTSConfig(**CFG["mcts"])
 
 
@@ -46,51 +47,14 @@ def test_gain_is_the_bayes_information_gain():
     assert pg.gain(pg.new(np.random.default_rng(0)), p) == pytest.approx(ref, rel=1e-5)  # legacy info_gain rounds rates
 
 
-def test_one_look_without_lbp_drops_entropy_by_the_ig_on_average():
-    """E[entropy drop of one sampled look] = expected IG (Bayes, psi None)."""
+def test_one_look_drops_entropy_by_the_ig_on_average():
+    """E[entropy drop of one sampled look] = expected IG (Bayes)."""
     sc = scen()
     b = np.random.default_rng(1).uniform(0.05, 0.95, sc.grid.shape)
     pg = PlanGrid(b, sc.lattice, sc.rates, 2)
     p, rng = Pose(6, 6, 3), np.random.default_rng(2)
     drops = [pg.observe(pg.new(rng), p, rng) for _ in range(200)]
     assert np.mean(drops) == pytest.approx(pg.gain(pg.new(rng), p), rel=0.02)
-
-
-def test_lbp_model_matches_the_real_mapper_over_repeated_looks():
-    """6 looks at one pose: mean footprint entropy of the planner's 5-copy model vs the real
-    observe + Bayes + LBP pipeline, on a fresh field."""
-    sc = scen()
-    lat, rng = sc.lattice, np.random.default_rng(3)
-    field = calibration_field(CFG, sc.grid)
-    psi = lbp_psi(lat, sc.rates, "adaptive", field, rng)
-    p = Pose(8, 8, 3)
-    i0, i1, j0, j1 = lat.footprint(p)
-    s = sc.rates.at(3)
-    real = np.zeros(6)
-    for _ in range(4):
-        bel = np.full(sc.grid.shape, 0.5)
-        for t in range(6):
-            update(bel, (i0, i1, j0, j1), observe(field, (i0, i1, j0, j1), *s, rng), *s, "adaptive")
-            real[t] += entropy(bel[i0:i1, j0:j1]).mean() / 4
-    pg = PlanGrid(np.full(sc.grid.shape, 0.5), lat, sc.rates, 2, psi)
-    a0, a1, b0, b1 = pg.bounds(p)
-    model = np.zeros(6)
-    for _ in range(4):
-        st = pg.new(rng)
-        for t in range(6):
-            pg.observe(st, p, rng)
-            model[t] += entropy(st.b[:, a0:a1, b0:b1]).mean() / 4
-    np.testing.assert_allclose(model, real, atol=0.06)
-
-
-def test_lbp_psi_values():
-    sc = scen()
-    f = calibration_field(CFG, sc.grid)
-    rng = np.random.default_rng(0)
-    assert lbp_psi(sc.lattice, sc.rates, "none", f, rng) is None
-    np.testing.assert_allclose(lbp_psi(sc.lattice, sc.rates, "equal", f, rng), 0.5)
-    np.testing.assert_allclose(lbp_psi(sc.lattice, sc.rates, "biased", f, rng), 0.7)
-    assert PlanGrid(f.astype(float), sc.lattice, sc.rates, 8, [0.5] * 6).c == 1  # equal = Bayes only
 
 
 def test_teammate_looks_lower_my_gain():
@@ -182,15 +146,16 @@ def test_lost_messages_equal_no_communication():
 
 
 # ------------------------------------------------------------------ wiring
-def test_runs_in_the_single_and_multi_loops():
+@pytest.mark.parametrize("name", PLANNERS)
+def test_every_planner_runs_in_the_single_and_multi_loops(name):
     sc = scen(1)
-    res = run_single(sc, make_dec_mcts(CFG, sc), 3, "adaptive")
+    res = run_single(sc, make_planner(name, CFG, sc), 3, "adaptive")
     assert len(res.poses) == 4
-    sc = scen(2)
-    res = run_multi(sc, "decmcts", 3, "adaptive", "BM", 5, dec=make_dec_mcts(CFG, sc))
+    sc = scen(3)
+    res = run_multi(sc, make_planner(name, CFG, sc, 5), 3, "adaptive", "BM", 5)
     assert all(len(p) == 4 for p in res.poses)
     with pytest.raises(ValueError):
-        run_multi(sc, "decmcts", 3, "adaptive")
+        make_planner("nope", CFG, sc)
 
 
 def test_share_plans_off_means_planning_alone():
@@ -217,12 +182,3 @@ def test_single_intent_variant():
         assert sc.lattice.move(sc.starts[r], acts[r]) == seqs[0][0]
     with pytest.raises(ValueError):
         DecMCTS(sc.lattice, sc.rates, DecMCTSConfig(variant="x")).plan(beliefs, sc.starts, [[1], [0]])
-
-
-def test_lbp_model_off_plans_with_bayes_only():
-    sc = scen(1)
-    dm = make_dec_mcts({**CFG, "mcts": {**CFG["mcts"], "lbp_model": False}}, sc)
-    assert dm.psi is None
-    assert make_dec_mcts(CFG, sc).psi is None  # default: Bayes only, as greedy IG
-    on = make_dec_mcts({**CFG, "mcts": {**CFG["mcts"], "lbp_model": True}}, sc)
-    assert on.psi is not None

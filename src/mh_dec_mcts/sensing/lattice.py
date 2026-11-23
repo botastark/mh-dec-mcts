@@ -77,6 +77,13 @@ class Lattice:
             return q
         return None
 
+    def step(self, p: Pose, action: str) -> Pose:
+        """move() for an action known to be admissible: raises ValueError instead of returning None."""
+        q = self.move(p, action)
+        if q is None:
+            raise ValueError(f"inadmissible action {action!r} at {p}")
+        return q
+
     def admissible(self, p: Pose) -> list[str]:
         return [a for a in ACTIONS if self.move(p, a) is not None]
 
@@ -113,9 +120,3 @@ def start_poses(lat: Lattice, n_agents: int, rng: np.random.Generator | None = N
     xy = corners[:n_agents] + [mids[i % 4] for i in range(max(0, n_agents - 4))]
     return [Pose(ix, iy, 0) for ix, iy in xy]
 
-
-def paper_lattice(grid: Grid, n_alt: int = 6, fov_deg: float = 60.0) -> Lattice:
-    """Legacy rule: xy_step = min(size)/16, h_step = xy_step / tan(fov/2), h_min = h_step."""
-    xy_step = min(grid.size_x, grid.size_y) / 16
-    h_step = xy_step / math.tan(math.radians(fov_deg) / 2)
-    return Lattice(grid, xy_step, h_step, h_step, n_alt, fov_deg)

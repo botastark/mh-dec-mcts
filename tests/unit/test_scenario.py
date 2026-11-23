@@ -28,7 +28,7 @@ def test_paper_config_matches_paper():
     assert (sc.lattice.nx, sc.lattice.ny, sc.lattice.n_alt) == (17, 17, 6)
     assert sc.lattice.altitudes[3] == pytest.approx(21.65, abs=0.01)
     assert sc.starts == [Pose(0, 0, 0)]
-    assert cfg["run"] == {"planner": "ig", "weights": "equal", "steps": 300, "runs": 20}
+    assert cfg["run"] == {"weights": "equal", "steps": 300, "runs": 20}
 
 
 def test_overrides_and_defaults():
@@ -62,7 +62,7 @@ def test_gaussian_truth_per_run():
 
 def test_observations_reproducible_and_independent_of_planning():
     a, b = make_scenario(small(), 0), make_scenario(small(), 0)
-    b.plan_rng.random(100)  # planner randomness must not shift the sensor noise
+    b.plan_rngs[0].random(100)  # planner randomness must not shift the sensor noise
     p = Pose(3, 2, 1)
     np.testing.assert_array_equal(a.observe(p), b.observe(p))
 

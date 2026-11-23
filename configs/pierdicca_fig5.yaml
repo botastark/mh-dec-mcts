@@ -11,4 +11,4 @@ field:   {type: gaussian, r: 5}
 sensor:  {type: theoretical, a: 1.0, b: 0.015}
 agents:  {n: 2, start: random}
 comms:   {range: 5, sharing: none}  # range in lattice steps (his radius_multiplier); 16 = whole field
-run:     {planner: ig, weights: adaptive, steps: 100, runs: 20}
+run:     {weights: adaptive, steps: 100, runs: 20}

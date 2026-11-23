@@ -44,7 +44,7 @@ DEFAULTS = {
     "sensor": {"type": "theoretical", "a": 1.0, "b": 0.015},
     "agents": {"n": 1, "start": "paper"},
     "comms": {"range": None, "sharing": "none"},  # range in waypoint steps (None = unlimited); none | BS | BM
-    "run": {"planner": "ig", "weights": "equal", "steps": 100, "runs": 20},
+    "run": {"weights": "equal", "steps": 100, "runs": 20},
     "mcts": {},  # DecMCTSConfig overrides for planner "decmcts" (planning/dec_mcts.py)
     "mh": {},  # MHConfig overrides for planner "mhmcts" (planning/mh_mcts.py)
 }
@@ -63,10 +63,6 @@ class Scenario:
     obs_rngs: list[np.random.Generator]  # per agent: sensor noise
     plan_rngs: list[np.random.Generator]  # per agent: tie-breaks, Random, Sweep direction
     order_rng: np.random.Generator  # multi-agent decision order (IGd)
-
-    @property
-    def plan_rng(self) -> np.random.Generator:  # single agent
-        return self.plan_rngs[0]
 
     def observe(self, pose: Pose, agent: int = 0) -> np.ndarray:
         """What the UAV sees from pose: classifier prediction or truth with synthetic noise."""
@@ -115,8 +111,10 @@ def make_lattice(grid: Grid, lc: dict) -> Lattice:
 def make_streams(cfg: dict) -> dict | None:
     """Experiment-wide generators for compat: pierdicca (None otherwise). One per experiment."""
     cfg = with_defaults(cfg)
-    if cfg["compat"] != "pierdicca":
-        return None
+    return _pierdicca_streams(cfg) if cfg["compat"] == "pierdicca" else None
+
+
+def _pierdicca_streams(cfg: dict) -> dict:
     p = cfg["pierdicca"]
     return {"map": np.random.default_rng(p["map_seed"]),
             # his Agent(..., seed=0): every agent has its own generator, all with the same seed
@@ -130,23 +128,25 @@ def make_scenario(cfg: dict, run: int = 0, streams: dict | None = None) -> Scena
     run_seed = int(cfg["seed"]) + run
     grid = Grid(**cfg["grid"])
     lat = make_lattice(grid, cfg["lattice"])
-    pierdicca = cfg["compat"] == "pierdicca"
-    if pierdicca:
+    pa: dict | None = None  # compat pierdicca: his generators, carried from run to run
+    if cfg["compat"] == "pierdicca":
         if streams is None:  # standalone call: fast-forward field and start generators to this run
-            streams = make_streams(cfg)
+            streams = _pierdicca_streams(cfg)
             for _ in range(run):
                 streams["map"].normal(size=grid.shape)
                 if cfg["agents"]["start"] == "random":
                     for _ in range(cfg["agents"]["n"]):
-                        streams["position"].choice(lat.nx), streams["position"].choice(lat.ny)
+                        streams["position"].choice(lat.nx)
+                        streams["position"].choice(lat.ny)
             streams["next_run"] = run
         if streams["next_run"] != run:
             raise ValueError(f"compat pierdicca: runs must be built in order (expected {streams['next_run']}, got {run})")
         streams["next_run"] += 1
+        pa = streams
     elif cfg["compat"] is not None:
         raise ValueError(f"unknown compat '{cfg['compat']}'")
 
-    truth = make_field(cfg["field"], grid, streams["map"] if pierdicca else np.random.default_rng(run_seed))
+    truth = make_field(cfg["field"], grid, pa["map"] if pa is not None else np.random.default_rng(run_seed))
 
     # sensor: rates computed once (theoretical) or loaded once per process (predictions)
     s = cfg["sensor"]
@@ -160,16 +160,16 @@ def make_scenario(cfg: dict, run: int = 0, streams: dict | None = None) -> Scena
 
     # start poses
     a = cfg["agents"]
-    if pierdicca and a["start"] == "random":  # his reset_agents_position: x then y per agent, seed 12
-        pr = streams["position"]
+    if pa is not None and a["start"] == "random":  # his reset_agents_position: x then y per agent, seed 12
+        pr = pa["position"]
         starts = [Pose(int(pr.choice(np.arange(lat.nx))), int(pr.choice(np.arange(lat.ny))), 0) for _ in range(a["n"])]
     else:
         starts = make_starts(lat, a["n"], a["start"], np.random.default_rng(run_seed))
 
     n = a["n"]
-    if pierdicca:  # per agent: one generator for noise and decisions, carried across runs
-        obs_rngs = plan_rngs = streams["agents"]
-        order_rng = streams["order"]
+    if pa is not None:  # per agent: one generator for noise and decisions, carried across runs
+        obs_rngs = plan_rngs = pa["agents"]
+        order_rng = pa["order"]
     else:
         # agent 0 keeps the legacy single-agent seeding (Field.rng reset to the run seed)
         obs_rngs = [np.random.default_rng(run_seed if i == 0 else [run_seed, 2, i]) for i in range(n)]
@@ -193,12 +193,6 @@ def make_field(f: dict, grid: Grid, rng: np.random.Generator) -> np.ndarray:
     if truth.shape != grid.shape:
         raise ValueError(f"field {truth.shape} does not match grid {grid.shape}")
     return truth
-
-
-def calibration_field(cfg: dict, grid: Grid) -> np.ndarray:
-    """A field like the scenario's for calibrating planner models: a fresh Gaussian field with
-    the same r and ref (fixed seed, never one of the evaluated fields), or the annotated map."""
-    return make_field(with_defaults(cfg)["field"], grid, np.random.default_rng([999, 999]))
 
 
 def mapping_weights(cfg: dict) -> str:

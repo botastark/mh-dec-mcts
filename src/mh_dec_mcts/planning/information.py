@@ -2,6 +2,7 @@
 
 import numpy as np
 
+
 def entropy(p: np.ndarray) -> np.ndarray:
     """Compute binary entropy of a random variable (or belief map)."""
 
@@ -21,6 +22,15 @@ def entropy(p: np.ndarray) -> np.ndarray:
             v2 = 1.0
 
     return -v1 * np.log2(v1) - v2 * np.log2(v2)
+
+
+def binary_entropy(p):
+    """Binary entropy in bits for the planner's inner loops: p clipped to [1e-12, 1 - 1e-12],
+    no NaN check. entropy() is the legacy-exact version (exactly 0 at p = 0 or 1) behind the
+    reported metrics."""
+    p = np.clip(p, 1e-12, 1 - 1e-12)
+    return -p * np.log2(p) - (1 - p) * np.log2(1 - p)
+
 
 def info_gain(prior: np.ndarray, s0: float, s1: float) -> np.ndarray:
     """Compute information gain (paper Eq. 3-8).

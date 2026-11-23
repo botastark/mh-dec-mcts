@@ -11,8 +11,7 @@ from pathlib import Path
 
 import numpy as np
 
-from mh_dec_mcts.planning.dec_mcts import make_dec_mcts
-from mh_dec_mcts.planning.planners import make_planner
+from mh_dec_mcts.planning.planners import PLANNERS, make_planner
 from mh_dec_mcts.scenario import load_config, make_scenario, make_streams, mapping_weights
 from mh_dec_mcts.sim.single import METRICS, run_single
 
@@ -20,7 +19,7 @@ from mh_dec_mcts.sim.single import METRICS, run_single
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("config")
-    ap.add_argument("--planners", nargs="+", default=["ig", "random", "sweep"])
+    ap.add_argument("--planners", nargs="+", default=["ig", "random", "sweep"], choices=PLANNERS)
     ap.add_argument("--weights", choices=["none", "equal", "biased", "adaptive"], help="override run.weights")
     ap.add_argument("--r", type=float, help="override field.r (Gaussian cluster radius)")
     ap.add_argument("--runs", type=int, help="override run.runs")
@@ -46,9 +45,7 @@ def main():
         streams = make_streams(cfg)  # None unless compat: pierdicca
         for i in range(rc["runs"]):
             sc = make_scenario(cfg, run=i, streams=streams)
-            planner = (make_dec_mcts(cfg, sc) if name == "decmcts"
-                       else make_planner(name, sc.lattice, sc.rates, cfg["compat"]))
-            res = run_single(sc, planner, rc["steps"], mapping_weights(cfg))
+            res = run_single(sc, make_planner(name, cfg, sc), rc["steps"], mapping_weights(cfg))
             for m in METRICS:
                 curves[name][m].append(getattr(res, m))
             if i == 0:

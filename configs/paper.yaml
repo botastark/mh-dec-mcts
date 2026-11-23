@@ -12,4 +12,4 @@ field:   {type: gaussian, r: 5}                 # r = cluster radius
 sensor:  {type: theoretical, a: 1.0, b: 0.015}  # sigma(h) = a (1 - exp(-b h))
 
 agents:  {n: 1, start: paper}                   # paper: lower-left corner | legacy | random
-run:     {planner: ig, weights: equal, steps: 300, runs: 20}
+run:     {weights: equal, steps: 300, runs: 20}

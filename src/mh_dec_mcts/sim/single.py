@@ -28,6 +28,7 @@ class RunResult:
 
 
 def run_single(sc: Scenario, planner, n_steps: int, weights: str = "equal") -> RunResult:
+    """planner: planning.planners.make_planner(name, cfg, sc), fresh for this run."""
     lat = sc.lattice
     belief = np.full(sc.grid.shape, 0.5)
     seen = np.zeros(sc.grid.shape, dtype=bool)
@@ -42,11 +43,8 @@ def run_single(sc: Scenario, planner, n_steps: int, weights: str = "equal") -> R
         res.coverage.append(coverage(seen))
         res.altitude.append(lat.xyz(pose)[2])
         # 2. plan, 3. move
-        action = planner.choose(belief, pose, res.poses, sc.plan_rng)
-        nxt = lat.move(pose, action)
-        if nxt is None:
-            raise RuntimeError(f"planner chose inadmissible action {action!r} at {pose}")
-        pose = nxt
+        action = planner.plan([belief], [pose], [[]])[0]
+        pose = lat.step(pose, action)
         res.actions.append(action)
         res.poses.append(pose)
         # 4. observe, 5. update

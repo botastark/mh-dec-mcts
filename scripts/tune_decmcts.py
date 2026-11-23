@@ -30,7 +30,7 @@ from pathlib import Path
 import numpy as np
 import yaml
 
-from mh_dec_mcts.planning.dec_mcts import make_dec_mcts
+from mh_dec_mcts.planning.planners import make_planner
 from mh_dec_mcts.scenario import load_config, make_scenario, mapping_weights
 from mh_dec_mcts.sim.multi import run_multi
 
@@ -38,9 +38,9 @@ from mh_dec_mcts.sim.multi import run_multi
 def one_run(cfg: dict, setting: dict, planner: str, run: int, steps: int):
     """(mean MSE over steps, final MSE, seconds per step) of one run."""
     sc = make_scenario(cfg, run)
-    dec = make_dec_mcts(cfg, sc) if planner == "decmcts" else None
+    pl = make_planner(planner, cfg, sc, setting["range"])
     t = time.time()
-    res = run_multi(sc, planner, steps, mapping_weights(cfg), setting["sharing"], setting["range"], 1e-4, dec)
+    res = run_multi(sc, pl, steps, mapping_weights(cfg), setting["sharing"], setting["range"])
     mse = np.mean(res.mse, axis=1)
     return float(mse.mean()), float(mse[-1]), (time.time() - t) / steps
 

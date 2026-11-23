@@ -9,4 +9,4 @@ lattice: {xy_step: null, h_min: null, h_step: null, n_alt: 6, fov_deg: 60}
 field:   {type: gaussian, r: 5}
 sensor:  {type: theoretical, a: 1.0, b: 0.015}
 agents:  {n: 1, start: random}    # his reset_agents_position without x / y
-run:     {planner: ig, weights: adaptive, steps: 100, runs: 20}
+run:     {weights: adaptive, steps: 100, runs: 20}
