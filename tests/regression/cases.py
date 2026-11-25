@@ -72,15 +72,6 @@ def run_py(tmp: Path, config, args: list[str]) -> tuple[dict, dict]:
     return res, arrays
 
 
-def scripts():
-    """The plot scripts' modules: each computes what it plots in a function `arrays`."""
-    sys.path.insert(0, str(REPO / "scripts"))
-    import plot_fig3
-    import plot_fig4
-    import plot_fig5
-    import plot_mission
-
-    return plot_fig3, plot_fig4, plot_fig5, plot_mission
 
 
 def ms(mu_sd) -> dict:
@@ -96,14 +87,15 @@ def run_single_case(tmp: Path, name, config, extra, runs, steps) -> dict:
         k = extra.index("--planners")
         planners, extra = [extra[k + 1]], extra[:k] + extra[k + 2:]
     res, arrays = run_py(tmp, config, ["--planners", *planners, *extra, "--runs", str(runs),
-                                       "--steps", str(steps), "--save-poses"])
-    fig3, fig4, _, _ = scripts()
-    if name == "single_fig4":  # plotted by plot_fig4 (one result per weights and r)
+                                       "--steps", str(steps)])
+    from mh_dec_mcts.plots import paper  # what the figures plot: *_arrays
+
+    if name == "single_fig4":  # plotted by Fig. 4 (one result per weights and r)
         cfg = res["meta"]["config_resolved"]
-        (data,) = fig4.arrays({(cfg["run"]["weights"], cfg["field"]["r"]): res["conditions"][0]}).values()
+        (data,) = paper.fig4_arrays({(cfg["run"]["weights"], cfg["field"]["r"]): res["conditions"][0]}).values()
         plotted = {"ig": data}
     else:
-        plotted = fig3.arrays(res)
+        plotted = paper.fig3_arrays(res)
     curves = {p: {m: ms(d[m]) for m in ("entropy", "mse", "coverage", "altitude")} for p, d in plotted.items()}
     run0 = {}
     for k, c in enumerate(res["conditions"]):
@@ -120,13 +112,13 @@ def run_multi_case(tmp: Path) -> dict:
     config, planners, sharing, ranges, ns, runs, steps = MULTI_CASE
     res, _ = run_py(tmp, config, ["--planners", *planners, "--sharing", *sharing, "--ranges", *map(str, ranges),
                                   "--n", *map(str, ns), "--runs", str(runs), "--steps", str(steps)])
-    from mh_dec_mcts.plotting import band
+    from mh_dec_mcts.plots import paper
+    from mh_dec_mcts.plots.common import band
 
-    _, _, fig5, _ = scripts()
-    plotted = fig5.arrays(res)  # mse, altitude, misalignment as plot_fig5 draws them
+    plotted = paper.fig5_arrays(res)  # mse, altitude, misalignment as Fig. 5 draws them
     out = {}
     for c in res["conditions"]:
-        k = fig5.key(c["planner"], c["sharing"], c["range"], c["n"])
+        k = paper.fig5_key(c["planner"], c["sharing"], c["range"], c["n"])
         out[k] = {**{m: ms(v) for m, v in plotted[k].items()}, "entropy": ms(band(c, "entropy"))}
     return strip(dict(sorted(out.items())))
 
@@ -142,10 +134,10 @@ def as_runs_json(res: dict, n: int) -> dict:
     m = res["meta"]
     saved = {"meta": {"config": m["config"], "setting": m["setting"], "runs": m["runs"], "steps": m["steps"],
                       "n": n, "trap": m["trap"]}, "planners": {}}
-    from mh_dec_mcts.plotting import band
+    from mh_dec_mcts.plots import mission
+    from mh_dec_mcts.plots.common import band
 
-    _, _, _, mission = scripts()
-    plotted = mission.arrays(res["conditions"])  # what plot_mission draws, the rest as stored
+    plotted = mission.arrays(res["conditions"])  # what the mission figure draws, the rest as stored
     for c in res["conditions"]:
         bands = {key: plotted[c["planner"]].get(key) or band(c, key) for key in MYOPIA_MEAN}
         saved["planners"][c["planner"]] = {
@@ -159,7 +151,7 @@ def run_myopia_case(tmp: Path, name, config, setting, n, runs, steps) -> dict:
     """The former planner-comparison script: runs.json (per-run scalars, mean / std curves) and every per-run curve and
     scalar of one_run (with the poses and the first-seen map)."""
     res, arrays = run_py(tmp, config, ["--setting", setting, "--n", str(n), "--runs", str(runs),
-                                       "--steps", str(steps), "--save-poses", "--planners", *MYOPIA_SPECS])
+                                       "--steps", str(steps), "--planners", *MYOPIA_SPECS])
     one = {}
     for k, c in enumerate(res["conditions"]):
         for r in c["runs"]:
@@ -173,32 +165,41 @@ def run_myopia_case(tmp: Path, name, config, setting, n, runs, steps) -> dict:
     return strip({"runs_json": as_runs_json(res, n), "one_run": one})
 
 
-def run_tune_case(tmp: Path) -> dict:
-    config, param, runs, steps = TUNE_CASE
+def run_tune(tmp: Path, args: list[str]) -> tuple[dict, dict, Path]:
+    """scripts/tune.py into a fresh folder: (tune.json, results, folder)."""
+    from mh_dec_mcts.experiment import load_results
+
     out = tmp / "tune"
-    sh(["scripts/tune_decmcts.py", config, "--param", *param, "--runs", str(runs), "--steps", str(steps),
-        "--jobs", "8", "--out", str(out)])
+    sh(["scripts/tune.py", *args, "--jobs", "8", "--out", str(out)])
     (folder,) = list(out.iterdir())
-    return strip(json.loads((folder / "tune.json").read_text()))
+    return json.loads((folder / "tune.json").read_text()), load_results(folder), folder
+
+
+def run_tune_case(tmp: Path) -> dict:
+    """The former Dec-MCTS tuning script's tune.json: base + one row per value, vs greedy."""
+    config, param, runs, steps = TUNE_CASE
+    t, _, _ = run_tune(tmp, [config, "--param", *param, "--runs", str(runs), "--steps", str(steps)])
+    keep = ("param", "value", "mcts", "d_auc", "se_auc", "d_final", "se_final")
+    return strip({"setting": t["setting"], "seed": t["seed"], "runs": t["runs"], "steps": t["steps"],
+                  "base": t["base"], "rows": [{k: r[k] for k in keep} for r in t["rows"] if r["param"] != "greedy"]})
 
 
 def run_sweep_case(tmp: Path) -> dict:
+    """The former horizon sweep (square, one UAV): its raw runs and summary CSV rows, now through
+    tune.py (greedy rollouts, the config's seed); planner names in the sweep's spelling."""
     conditions, horizons, runs, steps = SWEEP_CASE
-    work = tmp / "sweep"
-    work.mkdir()
-    for d in ("scripts", "configs"):  # the script writes results/ and paper/ relative to its cwd
-        (work / d).symlink_to(REPO / d)
-    sh([str(REPO / "scripts/horizon_sweep.py"), "--conditions", *conditions, "--horizons", *map(str, horizons),
-        "--runs", str(runs), "--steps", str(steps), "--jobs", "8"], cwd=work)
-    from mh_dec_mcts.experiment import load_results
-
-    n = {"square_n1": 1, "square_n4": 4, "rect_n1": 1, "rect_n4": 4}
-    raw = {c: as_runs_json(load_results(work / "results/horizon_sweep" / c), n[c]) for c in conditions}
-    import csv
-
-    with open(work / "paper/figures/horizon_sweep.csv") as f:
-        rows = [{k: v for k, v in r.items()} for r in csv.DictReader(f)]
-    return strip({"runs_json": raw, "csv": rows})
+    assert conditions == ["square_n1"]
+    t, res, _ = run_tune(tmp, ["configs/swarm.yaml", "--setting", "IGd_BM_R5", "--n", "1", "--base", "rollout=greedy",
+                               "--param", "horizon", *map(str, horizons), "--runs", str(runs), "--steps", str(steps),
+                               "--seed", "42"])
+    old = {"greedy": "greedy", **{f"decmcts:rollout=greedy,horizon={h}": f"decmcts:horizon={h},rollout=greedy"
+                                  for h in horizons}}
+    res["conditions"] = [{**c, "planner": old[c["planner"]]} for c in res["conditions"] if c["planner"] in old]
+    cols = ("runs", "avg_mse", "d_avg_pct", "d_avg_ci", "final_mse", "d_final_pct", "d_final_ci", "worst_avg_mse",
+            "p90_avg_mse", "stalled")
+    rows = [{"condition": "square_n1", "planner": old[r["spec"]], "horizon": str(r["value"] or 0),
+             **{k: str(r[k]) for k in cols}} for r in t["rows"] if r["spec"] in old]
+    return strip({"runs_json": {"square_n1": as_runs_json(res, 1)}, "csv": rows})
 
 
 # ------------------------------------------------------------------ all cases

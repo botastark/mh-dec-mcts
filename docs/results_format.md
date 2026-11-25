@@ -5,13 +5,15 @@ Every experiment run by `scripts/run.py` is saved in one folder, `<out>/<tag>/`:
 | file | content |
 |---|---|
 | `results.json` | every run's per-step curves and per-run scalars (below) |
-| `results.npz` | only with `--save-poses`: poses, first-seen maps and ground truth per run |
+| `results.npz` | every run's poses, per-UAV curves, first-seen map, ground truth (and with `--save-beliefs` the final beliefs) |
 | `results.txt` | the tables `run.py` printed |
 
+Only data is saved, no figures: every figure is drawn later from these files with
+`scripts/plot.py` (into `figures/` next to them), so changing a plot never needs a rerun.
 Only per-run data is stored. Means, std and s.e. are computed when plotting or tabulating
 (`mh_dec_mcts.experiment.curve_stats`, `se`, `paired_diff`). Read with
-`mh_dec_mcts.experiment.load_results(folder)` and `load_arrays(folder)`. JSON floats round-trip
-exactly; nothing is rounded.
+`mh_dec_mcts.experiment.load_results(folder)` and `load_arrays(folder)`. JSON floats and the npz
+arrays round-trip exactly; nothing is rounded (except the optional beliefs, float32).
 
 ```
 {
@@ -74,18 +76,16 @@ and UAVs), `balance` (coefficient of variation of the cells each UAV saw first),
 `cpu_per_step` (CPU seconds per step of the whole run). Also `plan_per_step` (mean of `plan`)
 and `wall` (wall seconds of the run). The three timings differ between otherwise identical runs.
 
-## `results.npz` (with `--save-poses`)
+## `results.npz` (always saved)
+
+Condition k is the k-th entry of `conditions` in `results.json`; run i its run `i`.
 
 | key | array |
 |---|---|
-| `c<k>_r<i>_poses` | (UAVs, steps + 1, 3) int: (ix, iy, altitude level) per pose, start first; condition k, run i |
+| `c<k>_r<i>_poses` | (UAVs, steps + 1, 3) int: (ix, iy, altitude level) per pose, start first |
+| `c<k>_r<i>_uav_mse` | (steps, UAVs) float64: each UAV's own MSE per step (the `mse` curve is their mean) |
+| `c<k>_r<i>_uav_entropy` | (steps, UAVs) float64: each UAV's own map entropy per step (bits) |
+| `c<k>_r<i>_uav_alt` | (steps, UAVs) float64: each UAV's altitude per step (m) |
 | `c<k>_r<i>_first` | (rows, cols) int32: step at which each cell was first seen, -1 = never |
+| `c<k>_r<i>_beliefs` | only with `--save-beliefs`: (UAVs, rows, cols) float32, each UAV's final belief |
 | `truth_r<i>` | (rows, cols) uint8: ground truth of run i (the same for every condition: paired) |
-
-## Old results
-
-`load_results` also reads the old `runs.json` of planner comparisons and horizon sweeps (also
-when renamed, e.g. `runs_rect_n1.json`). It returns
-it in the same shape (`schema` 0), with `curves = None` for every run and the stored mean (and
-std, if present) curves as `mean_curves` / `std_curves` of each condition. Summary plots and
-tables that only need scalars work on both.

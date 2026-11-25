@@ -6,6 +6,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+import numpy as np
 import pytest
 
 from mh_dec_mcts import experiment
@@ -115,4 +116,6 @@ def test_run_py_smoke(tmp_path):
     (r,) = d["conditions"][0]["runs"]
     assert len(r["curves"]["mse"]) == 3 and r["run_seed"] == d["meta"]["config_resolved"]["seed"]
     assert "avg MSE" in (tmp_path / "t/results.txt").read_text()
-    assert not (tmp_path / "t/results.npz").exists()  # only with --save-poses
+    with np.load(tmp_path / "t/results.npz") as z:  # always saved: everything the figures need
+        assert {"c0_r0_poses", "c0_r0_first", "c0_r0_uav_mse", "c0_r0_uav_alt", "truth_r0"} <= set(z.files)
+        assert z["c0_r0_uav_mse"].shape == (3, 1) and "c0_r0_beliefs" not in z.files  # beliefs: --save-beliefs

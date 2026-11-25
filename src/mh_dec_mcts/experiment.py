@@ -59,8 +59,8 @@ def paper_coverage(lat, shape: tuple[int, int], poses: list, steps: int) -> list
 def one_run(cfg: dict, setting: dict, spec: str, run: int, steps: int, late: int,
             stall_rate: float = 0.01, streams: dict | None = None) -> dict:
     """One run of planner `spec` in a team setting {"sharing", "range", "greedy"}: per-step curves
-    (averaged over the UAVs where per UAV), per-run scalars, the poses, the first-seen map and the
-    ground truth. streams: the experiment's generators for compat pierdicca (make_streams), the
+    (averaged over the UAVs where per UAV), the per-UAV curves (per_uav: [step][UAV]), per-run
+    scalars, the poses, the first-seen map, the ground truth and the final beliefs. streams: the experiment's generators for compat pierdicca (make_streams), the
     runs of one experiment built in order 0, 1, 2, ... with the same object."""
     name, over = parse(spec)
     mcts_over, mh_over = split_overrides(over)  # e.g. mhmcts:horizon=4,tile=12.5
@@ -108,7 +108,8 @@ def one_run(cfg: dict, setting: dict, spec: str, run: int, steps: int, late: int
             "balance": float(credit.std() / max(credit.mean(), 1e-12)),
             "stall": longest_stall(team_h, stall_rate), "first": first, "poses": res.poses, "cpu": cpu,
             "wall": wall, "coverage_paper": paper_coverage(lat, sc.grid.shape, res.poses, steps),
-            "truth": sc.truth}
+            "truth": sc.truth, "per_uav": {"mse": res.mse, "entropy": res.entropy, "alt": res.altitude},
+            "beliefs": res.beliefs}
 
 
 # ------------------------------------------------------------------ result format (docs/results_format.md)

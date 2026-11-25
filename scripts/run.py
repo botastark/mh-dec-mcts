@@ -4,7 +4,7 @@
     python scripts/run.py configs/swarm_rect.yaml --setting IGd_BM_R5 --n 4 \\
         --planners greedy decmcts:horizon=4,rollout=greedy mhmcts:horizon=4,rollout=greedy
     # Pierdicca Fig. 3 (one UAV, Bayes only) and Fig. 4 (one weights / r per call)
-    python scripts/run.py configs/pierdicca_fig3.yaml --planners ig random sweep --save-poses
+    python scripts/run.py configs/pierdicca_fig3.yaml --planners ig random sweep
     python scripts/run.py configs/pierdicca_fig4.yaml --planners ig --weights adaptive --r 2
     # Pierdicca Fig. 5: planners x sharing x ranges x team sizes
     python scripts/run.py configs/pierdicca_fig5.yaml --planners ig igd --sharing none BS BM \\
@@ -19,12 +19,13 @@ Runs: run i uses the scenario of seed + i for every planner (paired). Each (cond
 job of its own, submitted run by run. compat: pierdicca (his generators carry over from run to
 run): one job per condition, which runs 0, 1, 2, ... in order with one make_streams object.
 
-Output in <out>/<tag>/ (tag default: config name [_r<r>] _<weights> [_<setting>]):
-    results.json   every run's curves and scalars (docs/results_format.md)
-    results.npz    with --save-poses: poses, first-seen maps and ground truth per run
+Output in <out>/<tag>/ (tag default: config name [_r<r>] _<weights> [_<setting>]), data only:
+    results.json   every run's curves (UAV-averaged) and scalars (docs/results_format.md)
+    results.npz    every run's poses, per-UAV curves (MSE, entropy, altitude), first-seen map and
+                   ground truth; with --save-beliefs also the final belief of every UAV
     results.txt    the tables printed at the end: mean +- std over runs; the difference to the
                    first planner per run (paired) +- s.e.
-Figures: scripts/plot_mission.py, plot_fig3.py, plot_fig4.py, plot_fig5.py.
+Figures, any time later and without rerunning: scripts/plot.py (figures go to <tag>/figures/).
 """
 
 import os
@@ -44,8 +45,6 @@ import numpy as np
 
 from mh_dec_mcts.experiment import condition_id, make_meta, one_run, run_record, save_results
 from mh_dec_mcts.scenario import load_config, make_streams
-
-MAPS = ("first", "truth")  # large per-run arrays, kept only with --save-poses
 
 
 # ------------------------------------------------------------------ grid
@@ -76,18 +75,29 @@ def condition_cfg(config: str, over: dict, c: dict) -> dict:
 
 
 # ------------------------------------------------------------------ jobs (top level: picklable)
-def _keep(r: dict, save: bool) -> dict:
-    return r if save else {k: v for k, v in r.items() if k not in MAPS}
+def _keep(r: dict, beliefs: bool) -> dict:
+    """Drop the final beliefs (MBs per UAV) unless they are saved: less to send between processes."""
+    return r if beliefs else {k: v for k, v in r.items() if k != "beliefs"}
 
 
-def job_run(cfg, setting, spec, run, steps, late, stall_rate, save) -> dict:
-    return _keep(one_run(cfg, setting, spec, run, steps, late, stall_rate), save)
+def job_run(cfg, setting, spec, run, steps, late, stall_rate, beliefs) -> dict:
+    return _keep(one_run(cfg, setting, spec, run, steps, late, stall_rate), beliefs)
 
 
-def job_compat(cfg, setting, spec, runs, steps, late, stall_rate, save) -> list[dict]:
+def job_compat(cfg, setting, spec, runs, steps, late, stall_rate, beliefs) -> list[dict]:
     streams = make_streams(cfg)  # one experiment = fresh generators, carried from run to run
-    return [_keep(one_run(cfg, setting, spec, i, steps, late, stall_rate, streams), save)
+    return [_keep(one_run(cfg, setting, spec, i, steps, late, stall_rate, streams), beliefs)
             for i in range(runs)]
+
+
+def run_arrays(k: int, i: int, r: dict) -> dict[str, np.ndarray]:
+    """What results.npz keeps of run i of condition k (docs/results_format.md)."""
+    out = {f"c{k}_r{i}_poses": np.array([[(p.ix, p.iy, p.k) for p in path] for path in r["poses"]]),
+           f"c{k}_r{i}_first": r["first"],
+           **{f"c{k}_r{i}_uav_{m}": np.asarray(v, dtype=float) for m, v in r["per_uav"].items()}}
+    if "beliefs" in r:
+        out[f"c{k}_r{i}_beliefs"] = np.stack(r["beliefs"]).astype(np.float32)
+    return out
 
 
 # ------------------------------------------------------------------ progress
@@ -193,13 +203,14 @@ def parser() -> argparse.ArgumentParser:
     ap.add_argument("--weights", choices=["none", "equal", "biased", "adaptive"], help="override run.weights")
     ap.add_argument("--r", type=float, help="override field.r (Gaussian cluster radius)")
     ap.add_argument("--start", choices=["paper", "legacy", "random"], help="override agents.start")
+    ap.add_argument("--seed", type=int, help="override the config's seed (run i uses seed + i)")
     ap.add_argument("--jobs", type=int, default=os.cpu_count())
     ap.add_argument("--late", type=int, default=10, help="steps after which a first sighting counts as backfill")
     ap.add_argument("--stall-rate", type=float, default=0.01,
                     help="entropy drop per step, as a share of what is left, below which a step stalls")
     ap.add_argument("--trap", type=int, default=15, help="stall steps in a row that count as a stalled run")
-    ap.add_argument("--save-poses", action="store_true",
-                    help="also results.npz: poses, first-seen maps, ground truth (trajectory figures)")
+    ap.add_argument("--save-beliefs", action="store_true",
+                    help="also save every UAV's final belief map (float32; ~1 MB per UAV and run per 400x800 cells)")
     ap.add_argument("--out", default="results/runs")
     ap.add_argument("--tag", help="output folder name (default: config name [_r<r>] _<weights> [_<setting>])")
     return ap
@@ -215,6 +226,8 @@ def main(argv: list[str] | None = None) -> Path:
         over["agents"] = {"start": args.start}
     if args.r is not None:
         over["field"] = {"r": args.r}
+    if args.seed is not None:
+        over["seed"] = args.seed
     cfg = load_config(args.config, **over)
     runs, steps = cfg["run"]["runs"], cfg["run"]["steps"]
     conds = grid(cfg, args.planners, args.n or [cfg["agents"]["n"]], args.setting,
@@ -228,7 +241,7 @@ def main(argv: list[str] | None = None) -> Path:
 
     ccfgs = [condition_cfg(args.config, over, c) for c in conds]
     settings = [{"sharing": c["sharing"], "range": c["range"], "greedy": c["greedy"]} for c in conds]
-    rest = (steps, args.late, args.stall_rate, args.save_poses)
+    rest = (steps, args.late, args.stall_rate, args.save_beliefs)
     done: dict[tuple[str, int], dict] = {}
     todo = [(c["id"], i) for i in range(runs) for c in conds]  # run by run: every planner timed early
     t0 = time.time()
@@ -257,10 +270,8 @@ def main(argv: list[str] | None = None) -> Path:
         for i in range(runs):
             r = done[(c["id"], i)]
             c["runs"].append(run_record(r, i, int(ccfgs[k]["seed"]) + i))
-            if args.save_poses:
-                arrays[f"c{k}_r{i}_poses"] = np.array([[(p.ix, p.iy, p.k) for p in path] for path in r["poses"]])
-                arrays[f"c{k}_r{i}_first"] = r["first"]
-                arrays.setdefault(f"truth_r{i}", r["truth"])
+            arrays.update(run_arrays(k, i, r))
+            arrays.setdefault(f"truth_r{i}", r["truth"])
     meta = {**make_meta(args.config, cfg, sys.argv if argv is None else ["scripts/run.py", *argv]),
             "runs": runs, "steps": steps, "late": args.late, "stall_rate": args.stall_rate, "trap": args.trap,
             "setting": args.setting, "compat": cfg["compat"]}

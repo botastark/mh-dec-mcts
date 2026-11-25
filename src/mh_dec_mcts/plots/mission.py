@@ -1,29 +1,13 @@
-"""Planner-comparison figures from a run.py result.
+"""Planner-comparison figures from saved results, one set per team setting (n, sharing, range)."""
 
-    python scripts/plot_mission.py results/myopia/swarm_rect_IGd_BM_R5
-
-One set of figures per team setting (n, sharing, range) of the result:
-    mission.png    row 1, the mission: MSE, entropy (mean of the UAVs' own maps), altitude,
-                   coverage, planning time; row 2, the team: footprint overlap, connectivity,
-                   misalignment, backfill. Each run averaged over the UAVs; line = mean over
-                   runs, shade = +-1 std over runs (Pierdicca et al.'s convention).
-    runs.png       one dot per run: avg MSE of each planner vs the first planner on the same run
-                   (below the diagonal = better), final coverage, longest stall.
-    firstseen.png  (needs run.py --save-poses) the run where the first planner did worst (lowest
-                   final coverage, then highest MSE), every planner on that same field: step at
-                   which each cell was first seen, and the paths (light = start, dark = end).
-Also works on an old runs.json of a planner comparison (mission curves without std, runs.png).
-"""
-
-import argparse
 from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
 
-from mh_dec_mcts.experiment import load_arrays, load_results
-from mh_dec_mcts.plotting import band
+from mh_dec_mcts.plots.common import band
 from mh_dec_mcts.scenario import make_lattice
+from mh_dec_mcts.sensing.lattice import Pose
 from mh_dec_mcts.world.grid import Grid
 
 PANELS = [("mse", "MSE"), ("entropy", "Entropy (bits)"), ("alt", "Altitude (m)"), ("coverage", "Coverage"),
@@ -41,8 +25,15 @@ def groups(results: dict) -> dict[tuple, list[tuple[int, dict]]]:
     return out
 
 
+def title(results: dict, group: tuple) -> str:
+    n, sharing, range_, setting = group
+    meta = results["meta"]
+    name = (meta.get("config_resolved") or {}).get("name") or Path(str(meta.get("config"))).stem
+    return f"{name} {setting or f'sharing {sharing}, range {range_}'}, {n} UAV{'s' if n > 1 else ''}"
+
+
 def arrays(conds: list[dict]) -> dict[str, dict[str, tuple[np.ndarray, np.ndarray]]]:
-    """planner -> panel key -> (mean, std) over runs: what mission.png plots."""
+    """planner -> panel key -> (mean, std) over runs: what the mission figure plots."""
     out = {}
     for c in conds:
         have = c["runs"][0]["curves"] if c["runs"][0]["curves"] is not None else c["mean_curves"]
@@ -50,7 +41,9 @@ def arrays(conds: list[dict]) -> dict[str, dict[str, tuple[np.ndarray, np.ndarra
     return out
 
 
-def plot_curves(conds: list[dict], path, title):
+def curves(conds: list[dict], path: Path, title: str) -> None:
+    """Row 1, the mission: MSE, entropy (mean of the UAVs' own maps), altitude, coverage, planning
+    time. Row 2, the team: overlap, connectivity, misalignment, backfill. Mean +- std over runs."""
     fig, axs = plt.subplots(2, 5, figsize=(25, 8))
     axs[1, 4].axis("off")
     data = arrays(conds)
@@ -72,7 +65,7 @@ def plot_curves(conds: list[dict], path, title):
     plt.close(fig)
 
 
-def plot_runs(conds: list[dict], path, title):
+def runs(conds: list[dict], path: Path, title: str) -> None:
     """Per run: avg MSE vs the first planner (paired), final coverage, longest stall."""
     names = [c["planner"] for c in conds]
     sc = [[r["scalars"] for r in c["runs"]] for c in conds]
@@ -116,7 +109,8 @@ def path_cmap(hue: str):
     return LinearSegmentedColormap.from_list(hue, [c + 0.6 * (1 - c), c, 0.4 * c])
 
 
-def plot_first_seen(conds: list[tuple[int, dict]], arr: dict, cfg: dict, run: int, path, steps: int):
+def first_seen(conds: list[tuple[int, dict]], arr: dict, cfg: dict, run: int, path: Path, steps: int,
+               why: str = "") -> None:
     """Run `run` (the same field for every planner): step at which each cell was first seen, and
     the UAV paths, light at the first steps to dark at the last, one hue per UAV."""
     from matplotlib.collections import LineCollection
@@ -138,7 +132,7 @@ def plot_first_seen(conds: list[tuple[int, dict]], arr: dict, cfg: dict, run: in
         n_uav = len(paths)
         for a, poses in enumerate(paths):
             cmap = path_cmap(UAV_HUES[a % len(UAV_HUES)])
-            ij = np.array([grid.xy_to_ij(*lat.xyz(_pose(p))[:2]) for p in poses], dtype=float)
+            ij = np.array([grid.xy_to_ij(*lat.xyz(Pose(*map(int, p)))[:2]) for p in poses], dtype=float)
             xy = ij[:, ::-1]  # (column, row) = (x, y) on the image
             lc = LineCollection(np.stack([xy[:-1], xy[1:]], axis=1), cmap=cmap, norm=norm, linewidths=1.1)
             lc.set_array(np.arange(len(xy) - 1))  # segment t: step t -> t + 1
@@ -151,45 +145,8 @@ def plot_first_seen(conds: list[tuple[int, dict]], arr: dict, cfg: dict, run: in
     if n_uav > 1:
         axs[0, 0].legend(handles=[Line2D([], [], color=UAV_HUES[a % len(UAV_HUES)], lw=2, label=f"UAV {a}")
                                   for a in range(n_uav)], loc="upper left", fontsize=7, ncol=min(n_uav, 4))
-    fig.suptitle(f"run {run} (worst for the first planner): step at which each cell was first seen\n"
+    fig.suptitle(f"run {run}{why}: step at which each cell was first seen\n"
                  "white = never seen, black lines = ground-truth cluster edges\n"
                  "paths: light at the start (o) to dark at the end" + (", one hue per UAV" if n_uav > 1 else ""))
     fig.savefig(path, dpi=150)
     plt.close(fig)
-
-
-def _pose(p):
-    from mh_dec_mcts.sensing.lattice import Pose
-
-    return Pose(*map(int, p))
-
-
-def main(argv: list[str] | None = None) -> None:
-    ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    ap.add_argument("folder", help="a run.py output folder (results.json), or an old planner-comparison folder (runs.json)")
-    ap.add_argument("--out", help="output folder (default: the result folder)")
-    args = ap.parse_args(argv)
-    folder = Path(args.folder)
-    res, arr = load_results(folder), load_arrays(folder)
-    out = Path(args.out) if args.out else folder
-    out.mkdir(parents=True, exist_ok=True)
-    meta, gs = res["meta"], groups(res)
-    name = (meta.get("config_resolved") or {}).get("name") or Path(str(meta.get("config"))).stem
-    for (n, sharing, range_, setting), conds in gs.items():
-        suffix = "" if len(gs) == 1 else f"_n{n}_{sharing}_R{range_}"
-        title = f"{name} {setting or f'sharing {sharing}, range {range_}'}, {n} UAV{'s' if n > 1 else ''}"
-        cs = [c for _, c in conds]
-        runs = len(cs[0]["runs"])
-        plot_curves(cs, out / f"mission{suffix}.png", f"{title}: {runs} runs")
-        plot_runs(cs, out / f"runs{suffix}.png", f"{title}: one dot per run")
-        if arr:
-            worst = worst_run(cs[0])
-            plot_first_seen(conds, arr, meta["config_resolved"], worst, out / f"firstseen{suffix}.png",
-                            cs[0]["steps"])
-        else:
-            print("no results.npz (run.py --save-poses): firstseen.png skipped")
-    print(f"-> {out}")
-
-
-if __name__ == "__main__":
-    main()
