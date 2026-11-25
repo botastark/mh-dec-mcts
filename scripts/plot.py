@@ -4,7 +4,8 @@
     python scripts/plot.py firstseen RESULT --run 3       # first-seen map + paths of any run (default: worst)
     python scripts/plot.py curves RESULT --keys mse coverage_paper team_entropy --planners greedy mhmcts:horizon=4
     python scripts/plot.py uavs RESULT --planner greedy --n 4         # each UAV's own MSE / entropy / altitude
-    python scripts/plot.py fig3 RESULT                    # Pierdicca Fig. 3 (one UAV: IG, Random, Sweep)
+    python scripts/plot.py paired RESULT [RESULT ...]     # planner - first planner per run: per step + summary
+    python scripts/plot.py fig3 RESULT                  # Pierdicca Fig. 3 (one UAV: IG, Random, Sweep)
     python scripts/plot.py fig4 FOLDER [FOLDER ...]       # Pierdicca Fig. 4 (results per weights and r)
     python scripts/plot.py fig5 RESULT [--planners ig igd]          # Pierdicca Fig. 5
     python scripts/plot.py tune TUNING [TUNING ...]       # scripts/tune.py results side by side
@@ -20,7 +21,7 @@ import sys
 from pathlib import Path
 
 from mh_dec_mcts.experiment import CURVES, load_arrays, load_results
-from mh_dec_mcts.plots import explore, mission, paper, tune
+from mh_dec_mcts.plots import explore, mission, paired, paper, tune
 
 
 def select(res: dict, args) -> list[tuple[int, dict]]:
@@ -104,6 +105,18 @@ def cmd_uavs(args):
     return out
 
 
+def cmd_paired(args):
+    out = outdir(args, args.results[0])
+    blocks = [b for p in args.results for b in paired.compare(load_results(p), args.split)]
+    rs = paired.rows(blocks)
+    txt = paired.table(rs)
+    print(txt)
+    (out / "paired.txt").write_text(txt + "\n")
+    paired.curves(blocks, out / "paired_curves.png", args.keys)
+    paired.forest(rs, out / "paired_summary.png")
+    return out
+
+
 def cmd_fig3(args):
     res, arr = load_results(args.result), load_arrays(args.result)
     out = outdir(args, args.result)
@@ -159,6 +172,11 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument("--log", nargs="+", help="keys drawn on a log axis")
     add("uavs", cmd_uavs, "each UAV's own MSE / entropy / altitude").add_argument(
         "--planner", dest="planners", nargs="+", metavar="SPEC")
+    p = add("paired", cmd_paired, "each planner minus the first on the same runs, several results side by side",
+            result=False, filters=False)
+    p.add_argument("results", nargs="+", type=Path, help="run.py output folders")
+    p.add_argument("--keys", nargs="+", default=list(paired.CURVE_KEYS), help="curves to difference per step")
+    p.add_argument("--split", type=int, help="step splitting before / after (default: reference's mean t95)")
     add("fig3", cmd_fig3, "Pierdicca Fig. 3", filters=False).add_argument("--traj", nargs=2, metavar="PLANNER")
     p = add("fig4", cmd_fig4, "Pierdicca Fig. 4", result=False, filters=False)
     p.add_argument("paths", nargs="+", type=Path, help="results per weights and r, or folders holding them")
