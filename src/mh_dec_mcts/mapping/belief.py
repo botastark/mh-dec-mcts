@@ -47,7 +47,12 @@ def adaptive_psi_pierdicca(z: np.ndarray) -> np.ndarray:
 
     Differs from adaptive_psi in one detail of his code: the 3x3 windows are built with
     reshape(max(rows//3, cols//3), 3, -1, 3), which scrambles them when the (clipped)
-    observation is wider than tall. np.corrcoef without guards, as in his code.
+    observation is wider than tall.
+
+    One guard his code lacks: when the correlation is undefined (every window centre, or every
+    neighbour count, the same), rho = 0, i.e. equal weights, as adaptive_psi. His code gets a NaN
+    weight there and stops at its own belief asserts (Fig. 5, IGd + BM, R = 5, N = 8, run 6).
+    Wherever the correlation is defined, the result is unchanged.
     """
     pr, pc = (-z.shape[0]) % 3, (-z.shape[1]) % 3
     o = np.pad(z, ((0, pr), (0, pc)), mode="edge") if pr or pc else z
@@ -55,7 +60,10 @@ def adaptive_psi_pierdicca(z: np.ndarray) -> np.ndarray:
          .reshape((o.shape[0] // 3) * (o.shape[1] // 3), 3, 3))
     centre = v[:, 1, 1]
     n_occ = np.count_nonzero(np.stack([v[:, 0, 1], v[:, 1, 2], v[:, 2, 1], v[:, 1, 0]], axis=1), axis=1)
-    rho = np.corrcoef(centre, n_occ)[0, 1]
+    with np.errstate(divide="ignore", invalid="ignore"):  # zero variance: NaN, handled below
+        rho = np.corrcoef(centre, n_occ)[0, 1]
+    if not np.isfinite(rho):
+        rho = 0.0
     w = 1 / (1 + np.exp(-rho))
     return np.array([[w, 1 - w], [1 - w, w]])
 
