@@ -81,11 +81,12 @@ def rows(blocks: list[dict]) -> list[dict]:
 
 
 def table(rs: list[dict]) -> str:
-    head = (f"{'setting':34s} {'planner':34s} {'metric':20s} {'diff':>10s} {'% of ref':>18s}"
+    w = max(len(r["planner"]) for r in rs)
+    head = (f"{'setting':34s} {'planner':{w}s} {'metric':20s} {'diff':>10s} {'% of ref':>18s}"
             f" {'lower/ties/runs':>16s} {'p (Wilcoxon)':>12s}")
     lines = [head]
     for r in rs:
-        lines.append(f"{r['setting'][:34]:34s} {r['planner'][:34]:34s} {r['metric']:20s} {r['d']:+10.5f}"
+        lines.append(f"{r['setting'][:34]:34s} {r['planner']:{w}s} {r['metric']:20s} {r['d']:+10.5f}"
                      f" {r['pct']:+8.1f} +- {r['pct_ci']:5.1f}% {r['lower']:5d}/{r['ties']:2d}/{r['runs']:2d}"
                      f"       {r['p']:8.3f}{' *' if r['p'] < 0.05 else ''}")
     return "\n".join(lines)
@@ -114,9 +115,9 @@ def curves(blocks: list[dict], path: Path, keys=CURVE_KEYS) -> None:
             if i == len(keys) - 1:
                 ax.set_xlabel("Step")
     axs[0, 0].legend(fontsize=8)
-    fig.suptitle("Paired difference to the reference per step (same runs): mean +- 95 % CI over runs;"
-                 " below 0 = lower than the reference; dashed = split (reference's mean step to 95 % coverage)",
-                 fontsize=10)
+    fig.suptitle("Paired difference to the reference per step (same runs), mean +- 95 % CI over runs\n"
+                 "below 0 = lower than the reference; dashed = reference's mean step to 95 % coverage",
+                 fontsize=9)
     fig.tight_layout()
     fig.savefig(path, dpi=150)
     plt.close(fig)
@@ -142,8 +143,8 @@ def forest(rs: list[dict], path: Path) -> None:
         ax.grid(alpha=0.4, axis="x")
     axs[0, 0].set_yticks(range(len(labels)), [f"{label(p)}  |  {s}" for s, p in labels], fontsize=8)
     axs[0, 0].invert_yaxis()
-    fig.suptitle("Planner vs reference on the same runs: mean +- 95 % CI over runs (filled: Wilcoxon p < 0.05;"
-                 " < 0 = lower: better for MSE, steps and CPU)", fontsize=10)
+    fig.suptitle("Planner vs reference on the same runs: mean +- 95 % CI over runs\n"
+                 "filled: Wilcoxon p < 0.05; < 0 = lower (better for MSE, steps and CPU)", fontsize=9)
     fig.tight_layout()
     fig.savefig(path, dpi=150)
     plt.close(fig)

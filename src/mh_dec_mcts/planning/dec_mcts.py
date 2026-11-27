@@ -53,7 +53,11 @@ class DecMCTSConfig:
     cool: float = 0.8  # beta <- cool * beta each round; back to beta0 when X_hat is re-selected
     rollout: str = "random"  # rollout policy: random | greedy
     reward_discount: float = 1.0  # weight of the t-th footprint along a sequence
-    stride: int = 8  # plan on every stride-th cell (objective.PlanGrid)
+    stride: int = 1  # plan on every stride-th cell (objective.PlanGrid); 1 = full grid, as greedy.
+    #                  > 1 is a speed-up only: the planner sees 1 / stride**2 of the cells
+    stride_fine: int | None = None  # coverage-adaptive stride: a UAV plans at `stride` until its
+    #                                 coverage reaches stride_cov, then at stride_fine (None: fixed)
+    stride_cov: float = 0.9  # coverage = share of cells its belief has seen (b != 0.5: observed or shared)
     drop: float = 0.0  # probability that a message is lost
     share_plans: bool = True  # False: no plan exchange, every agent plans alone (ablation)
     variant: str = "distribution"  # distribution: Best et al. 2019 (X_hat + q, Alg. 3, argmax q)
@@ -163,6 +167,7 @@ class DecMCTS:
         self.comm_rng = np.random.default_rng(self.rng.integers(2**62))  # message loss only
         self.last_q: list[tuple[list[Seq], np.ndarray]] = []  # per agent, for inspection
         self.last_trees: list[Tree] = []
+        self.last_strides: list[int] = []  # per agent, the stride of the last plan()
 
     # ---------- single agent ----------
     def choose(self, belief, pose, visited=None, rng=None) -> str:
@@ -176,7 +181,8 @@ class DecMCTS:
             raise ValueError(f"unknown Dec-MCTS variant '{cfg.variant}'")
         if not cfg.share_plans:
             nbrs = [[] for _ in range(n)]
-        grids = [PlanGrid(b, self.lat, self.rates, cfg.stride) for b in beliefs]
+        grids = [PlanGrid(b, self.lat, self.rates, self.stride_for(b)) for b in beliefs]
+        self.last_strides = [g.s for g in grids]
         self._start_plan(grids)
         trees = [self._new_tree(p) for p in poses]
         own: list[list[Seq]] = [[] for _ in range(n)]  # X_hat_r
@@ -207,6 +213,15 @@ class DecMCTS:
             beta = cfg.beta0 if (it + 1) % cfg.resample_every == 0 else beta * cfg.cool
         self.last_q, self.last_trees = list(zip(own, q)), trees
         return [self._first_action(poses[r], own[r][int(np.argmax(q[r]))]) for r in range(n)]
+
+    def stride_for(self, belief: np.ndarray) -> int:
+        """The planning stride for one UAV this step: `stride`, or with stride_fine set, stride_fine
+        once the UAV's own coverage (cells its belief has seen) reaches stride_cov. Unseen cells
+        hold the prior 0.5 exactly (Bayes and LBP only touch the footprint)."""
+        cfg = self.cfg
+        if cfg.stride_fine is None:
+            return cfg.stride
+        return cfg.stride_fine if np.mean(belief != 0.5) >= cfg.stride_cov else cfg.stride
 
     # ---------- hooks (planners built on Dec-MCTS override these; see mh_mcts.MHMCTS) ----------
     def _start_plan(self, grids: list[PlanGrid]) -> None:

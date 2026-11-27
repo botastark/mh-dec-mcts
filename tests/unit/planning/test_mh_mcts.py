@@ -188,6 +188,20 @@ def test_team_run_with_the_scenario_settings():
     assert all(len(o) == mh.reg.n for o in mh.last_open)  # nothing finished after 3 steps
 
 
+def test_team_run_with_a_coverage_adaptive_stride():
+    """The stride drops from 8 to 4 once a UAV has seen 5 % of the field: regions and mission time
+    switch with it, HL trees and orders carry over (region ids do not depend on the stride)."""
+    cfg = {**CFG, "agents": {"n": 2, "start": "legacy"}, "mcts": {**FAST, "stride_fine": 4, "stride_cov": 0.05},
+           "mh": {"tile": 12.5}}
+    sc = make_scenario(cfg, 0)
+    mh = make_mh_mcts(cfg, sc)
+    res = run_multi(sc, mh, 4, "adaptive", "BM", 5)
+    assert all(len(p) == 5 for p in res.poses)
+    assert mh.last_strides == [4, 4] and set(mh._times) == {8, 4}
+    assert mh.time_at(4).reg.n == mh.time_at(8).reg.n
+    assert abs(mh.time_at(4).lam / mh.time_at(8).lam - 1) < 0.25  # bits per look, either grid
+
+
 # ------------------------------------------------------------------ step 4: wiring
 def test_spec_overrides_go_to_their_config_sections():
     mcts, mh = split_overrides({"horizon": 4, "rollout": "greedy", "tile": 12.5, "g2_weight": 0.0})

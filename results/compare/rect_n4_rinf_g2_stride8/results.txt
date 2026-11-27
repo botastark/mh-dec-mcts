@@ -1,0 +1,25 @@
+swarm_rect IG_BS_Rinf, 4 UAVs: 20 runs x 100 steps (mean +- std over runs; vs the first planner: paired difference +- s.e.; nan = never reached)
+                             planner  steps to 80% cov   to 95%    backfill %   avg MSE         vs greedy (paired)  final MSE mean alt       stall  stalled incomplete      plan s/step
+                              greedy        16 +-   1     19     1.9 +- 1.8    0.0374 +0.0000 +- 0.0000 ( +0.0%)    0.00005    21.3m   0.0 +- 0.0     0/20       0/20    0.067 +- 0.010
+mhmcts:horizon=4,rollout=greedy,g2_weight=0        16 +-   1     19     2.2 +- 1.5    0.0374 -0.0000 +- 0.0003 ( -0.1%)    0.00009    22.5m   0.0 +- 0.0     0/20       0/20    0.444 +- 0.024
+mhmcts:horizon=4,rollout=greedy,g2_weight=0.25        16 +-   1     19     3.4 +- 1.6    0.0382 +0.0008 +- 0.0003 ( +2.1%)    0.00014    22.7m   0.0 +- 0.0     0/20       0/20    0.520 +- 0.042
+mhmcts:horizon=4,rollout=greedy,g2_weight=0.5        16 +-   0     19     3.2 +- 1.1    0.0390 +0.0016 +- 0.0004 ( +4.4%)    0.00009    22.5m   0.0 +- 0.0     0/20       0/20    0.527 +- 0.034
+     mhmcts:horizon=4,rollout=greedy        16 +-   1     21     4.4 +- 1.8    0.0401 +0.0027 +- 0.0003 ( +7.2%)    0.00013    22.4m   0.1 +- 0.2     0/20       0/20    0.531 +- 0.021
+mhmcts:horizon=4,rollout=greedy,hl_rollouts=0        16 +-   0     19     2.8 +- 1.1    0.0384 +0.0010 +- 0.0003 ( +2.6%)    0.00008    22.7m   0.0 +- 0.0     0/20       0/20    0.488 +- 0.032
+
+                     avg MSE per run   median      std  90th pct    worst  stall >= trap  avg MSE of stalled runs
+                              greedy   0.0369   0.0021    0.0398   0.0434          0/20                      nan
+mhmcts:horizon=4,rollout=greedy,g2_weight=0   0.0370   0.0016    0.0389   0.0425          0/20                      nan
+mhmcts:horizon=4,rollout=greedy,g2_weight=0.25   0.0379   0.0017    0.0396   0.0439          0/20                      nan
+mhmcts:horizon=4,rollout=greedy,g2_weight=0.5   0.0386   0.0019    0.0420   0.0438          0/20                      nan
+     mhmcts:horizon=4,rollout=greedy   0.0397   0.0022    0.0428   0.0466          0/20                      nan
+mhmcts:horizon=4,rollout=greedy,hl_rollouts=0   0.0380   0.0019    0.0407   0.0441          0/20                      nan
+
+                                team        overlap   connectivity   misalignment      balance
+                              greedy   0.230 +-0.059   1.000 +-0.000   0.000 +-0.000  0.08 +-0.07
+mhmcts:horizon=4,rollout=greedy,g2_weight=0   0.215 +-0.052   1.000 +-0.000   0.000 +-0.000  0.05 +-0.05
+mhmcts:horizon=4,rollout=greedy,g2_weight=0.25   0.228 +-0.078   1.000 +-0.000   0.000 +-0.000  0.07 +-0.04
+mhmcts:horizon=4,rollout=greedy,g2_weight=0.5   0.229 +-0.064   1.000 +-0.000   0.001 +-0.000  0.07 +-0.03
+     mhmcts:horizon=4,rollout=greedy   0.214 +-0.064   1.000 +-0.000   0.000 +-0.000  0.10 +-0.05
+mhmcts:horizon=4,rollout=greedy,hl_rollouts=0   0.219 +-0.068   1.000 +-0.000   0.000 +-0.000  0.09 +-0.04
+

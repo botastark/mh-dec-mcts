@@ -17,6 +17,7 @@ Curves are mean +- 1 std over runs (each run averaged over its UAVs), as in Pier
 """
 
 import argparse
+import csv
 import sys
 from pathlib import Path
 
@@ -112,6 +113,10 @@ def cmd_paired(args):
     txt = paired.table(rs)
     print(txt)
     (out / "paired.txt").write_text(txt + "\n")
+    with open(out / "paired.csv", "w", newline="") as f:
+        w = csv.DictWriter(f, fieldnames=list(rs[0]))
+        w.writeheader()
+        w.writerows(rs)
     paired.curves(blocks, out / "paired_curves.png", args.keys)
     paired.forest(rs, out / "paired_summary.png")
     return out

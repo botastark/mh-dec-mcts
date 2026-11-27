@@ -110,6 +110,27 @@ def test_distribution_moves_to_the_better_sequence():
     assert q[1] > 0.6
 
 
+# ------------------------------------------------------------------ planning stride
+def test_stride_fixed_or_switched_by_own_coverage():
+    sc = scen()
+    b = np.full(sc.grid.shape, 0.5)
+    assert DecMCTS(sc.lattice, sc.rates, DecMCTSConfig()).stride_for(b) == 1  # default: full grid, as greedy
+    adapt = DecMCTS(sc.lattice, sc.rates, DecMCTSConfig(stride=8, stride_fine=2, stride_cov=0.5))
+    assert adapt.stride_for(b) == 8  # nothing seen: coarse
+    b[: b.shape[0] // 2 - 1] = 0.3
+    assert adapt.stride_for(b) == 8  # just under half seen
+    b[: b.shape[0] // 2 + 1] = 0.3
+    assert adapt.stride_for(b) == 2  # past half: fine
+
+
+def test_each_uav_plans_at_its_own_stride():
+    sc = scen()
+    seen, unseen = np.full(sc.grid.shape, 0.2), np.full(sc.grid.shape, 0.5)
+    dec = DecMCTS(sc.lattice, sc.rates, DecMCTSConfig(**{**CFG["mcts"], "stride_fine": 4}), seed=0)
+    acts = dec.plan([seen, unseen], sc.starts, [[1], [0]])
+    assert dec.last_strides == [4, 8] and len(acts) == 2
+
+
 # ------------------------------------------------------------------ team planning
 def test_actions_admissible_and_reproducible():
     sc = scen(3)

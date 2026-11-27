@@ -316,18 +316,26 @@ class MHMCTS(DecMCTS):
         cfg.variant = "single"
         super().__init__(lat, rates, cfg, seed)
         self.mh = mh or MHConfig()
-        self.reg = Regions(lat, cfg.stride, self.mh.tile)
-        lam = look_rate(lat, rates, cfg.stride) if self.mh.rate == "auto" else float(self.mh.rate)
-        self.T = MissionTime(self.reg, lam, self.mh.done_entropy)
+        self._times: dict[int, MissionTime] = {}  # per planning stride (coverage-adaptive stride)
+        self.T = self.time_at(cfg.stride)  # at the base stride (inspection, tests)
+        self.reg = self.T.reg
         self.last_open: list[frozenset[int]] = []  # per UAV, regions open at the last plan()
         self.hl_trees: dict[int, RegionTree] = {}  # per UAV, kept across plan() calls
         self.last_hl: list[Order | None] = []  # per UAV, its current order (HL intent)
         self._hl_known: list[dict[int, Order | None]] = []  # per UAV, teammates' orders received
         self._grids: list[PlanGrid] = []
 
+    def time_at(self, stride: int) -> "MissionTime":
+        """g2 (regions + mission time) on the planning sub-grid of `stride`. Region ids, boxes and
+        distances do not depend on the stride, so HL trees and orders carry over when it changes."""
+        if stride not in self._times:
+            lam = look_rate(self.lat, self.rates, stride) if self.mh.rate == "auto" else float(self.mh.rate)
+            self._times[stride] = MissionTime(Regions(self.lat, stride, self.mh.tile), lam, self.mh.done_entropy)
+        return self._times[stride]
+
     def _start_plan(self, grids) -> None:
         self._grids = grids
-        self.last_open = [self.T.open(g.base) for g in grids]  # each UAV judges with its own belief
+        self.last_open = [self.time_at(g.s).open(g.base) for g in grids]  # each UAV judges with its own belief
         for r, op in enumerate(self.last_open):  # HL trees persist while regions only close
             tree = self.hl_trees.get(r)
             if not self.mh.hl_rollouts or not op:
@@ -364,15 +372,15 @@ class MHMCTS(DecMCTS):
         open_, mine, others, theirs = ctx
         if not open_ or self.mh.g2_weight == 0:
             return super()._tree_reward(tree, grid, g, seq, ctx)
-        pose = tree.root.pose
-        e_stay = self.reg.entropy(g.b)  # after the teammates' looks, before own
+        pose, T = tree.root.pose, self.time_at(grid.s)
+        e_stay = T.reg.entropy(g.b)  # after the teammates' looks, before own
         f = super()._tree_reward(tree, grid, g, seq, ctx)
-        e_plan = self.reg.entropy(g.b) if seq else e_stay
+        e_plan = T.reg.entropy(g.b) if seq else e_stay
         end = seq[-1] if seq else pose
         orders = [mine] + theirs
-        t_stay = self.T(e_stay, open_, [(0, (pose.ix, pose.iy))] + others, orders)
-        t_plan = self.T(e_plan, open_, [(len(seq), (end.ix, end.iy))] + others, orders)
-        return f + self.mh.g2_weight * self.T.lam * (t_stay - t_plan)
+        t_stay = T(e_stay, open_, [(0, (pose.ix, pose.iy))] + others, orders)
+        t_plan = T(e_plan, open_, [(len(seq), (end.ix, end.iy))] + others, orders)
+        return f + self.mh.g2_weight * T.lam * (t_stay - t_plan)
 
     def _round_done(self, r: int, tree: Tree, known: dict) -> None:
         """Agent r's HL rollouts of this round, against its new low-level intent and the known
@@ -385,16 +393,17 @@ class MHMCTS(DecMCTS):
         me = (len(ll), (ll[-1].ix, ll[-1].iy)) if ll else (0, (pose.ix, pose.iy))
         others, theirs = self._teammates(r, known)
         st = self._grids[r].with_others([ll] + [s[0] for s, _ in known.values()], self.rng)
-        E = self.reg.entropy(st.b)
-        t_null = self.T(E, open_, [me] + others, [None] + theirs)
-        reg = self.reg if self.mh.hl_rollout == "nearest" else None
+        T = self.time_at(self._grids[r].s)
+        E = T.reg.entropy(st.b)
+        t_null = T(E, open_, [me] + others, [None] + theirs)
+        reg = T.reg if self.mh.hl_rollout == "nearest" else None
         for _ in range(self.mh.hl_rollouts):
             node = hl.select_expand(self.rng)
             order = hl.complete(node, self.rng, reg, me[1])
             if not node.seq:
                 node.seq = order
-            t = self.T(E, open_, [me] + others, [order] + theirs)
-            hl.backprop(node, self.mh.g2_weight * self.T.lam * (t_null - t))
+            t = T(E, open_, [me] + others, [order] + theirs)
+            hl.backprop(node, self.mh.g2_weight * T.lam * (t_null - t))
         self.last_hl[r] = hl.exploit_sequence() or None
 
     def _delivered(self, sender: int, receiver: int) -> None:

@@ -7,7 +7,7 @@ name: swarm_big
 seed: 42
 compat: null
 
-grid:    {size_x: 100, size_y: 50, cell: 0.125}  # 800 rows x 1600 cols
+grid:    {size_x: 200, size_y: 100, cell: 0.125}  # 800 rows x 1600 cols
 lattice: {xy_step: 3.125, h_min: null, h_step: null, n_alt: 6, fov_deg: 60}
 field:   {type: gaussian, r: 5, ref: 50.0}   # clusters sized as on the 50 x 50 m paper field
 sensor:  {type: theoretical, a: 1.0, b: 0.015}
@@ -27,7 +27,9 @@ mcts:                    # planning/dec_mcts.py DecMCTSConfig
   cp: 0.5                # exploration constant of the tree's upper confidence bound
   rollout: greedy        # how a sequence is completed below the tree: random | greedy (best expected IG)
   reward_discount: 1.0   # weight of the t-th look in a sequence: reward_discount^t
-  stride: 8              # planner works on every 8th cell (1 m); cheaper, footprints still aligned
+  stride: 1              # planning grid = every stride-th cell; 1 = full grid (as greedy), > 1 = faster, coarser
+  stride_fine: null      # coverage-adaptive: plan at stride_fine once a UAV has seen stride_cov of the field
+  stride_cov: 0.9
   drop: 0.0              # probability a plan message is lost
   share_plans: true      # false: no plan exchange at all (ablation)
   # only for variant distribution:
