@@ -475,6 +475,7 @@ class MHGreedy:
         self.T = MissionTime(Regions(lat, stride, mh.tile), lam, mh.done_entropy)
         self.hl_trees: dict[int, RegionTree] = {}
         self.last_hl: list[Order | None] = []
+        self.g2_changed: list[float] = []  # per step: share of UAVs whose move g2 changed (vs IG / IGd)
 
     def plan(self, beliefs, poses, nbrs) -> list[str]:
         from mh_dec_mcts.comms.network import neighbours
@@ -490,6 +491,7 @@ class MHGreedy:
         predicted, decided = list(poses), [False] * n
         actions = ["hover"] * n
         self.last_hl = [None] * n
+        changed = 0
         for a in (self.order_rng.permutation(n) if n > 1 else [0]):
             mates = neighbours(predicted, self.range)[a] if n > 1 else []
             if self.overlap and n > 1:
@@ -497,12 +499,17 @@ class MHGreedy:
                     nb_fp = lat.footprint(predicted[nb])
                     for act in scores[a]:
                         scores[a][act] *= 1.0 - iou(nb_fp, lat.footprint(lat.step(poses[a], act)))
+            ig_best = max(scores[a].values())
             if w:
                 others = [(int(decided[j]), (predicted[j].ix, predicted[j].iy)) for j in mates]
                 g2 = self._g2(a, beliefs[a], poses[a], others, budget)
                 scores[a] = {act: v + w * self.T.lam * g2[act] for act, v in scores[a].items()}
+                ig = {act: v - w * self.T.lam * g2[act] for act, v in scores[a].items()}
             actions[a] = pick_best(scores[a], self.rngs[a], self.tie_eps)
+            if w and ig[actions[a]] < ig_best - self.tie_eps:
+                changed += 1  # not a move IG (IGd) alone would have taken
             predicted[a], decided[a] = lat.step(poses[a], actions[a]), True
+        self.g2_changed.append(changed / n)
         return actions
 
     def _g2(self, r: int, belief, pose: Pose, others: list[Robot], budget) -> dict[str, float]:

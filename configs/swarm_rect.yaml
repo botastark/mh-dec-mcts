@@ -17,6 +17,7 @@ run:     {weights: adaptive, steps: 100, runs: 20}
 settings:
   IG_BS_Rinf: {range: 32, sharing: BS, greedy: ig}    # 32 waypoints = whole field
   IGd_BM_R5:  {range: 5,  sharing: BM, greedy: igd}
+  IGd_BM_R2:  {range: 2,  sharing: BM, greedy: igd}   # stress: shorter comms range
 
 mcts:                    # planning/dec_mcts.py DecMCTSConfig
   variant: single        # single: one intent per UAV (MH-MCTS paper) | distribution: 10 plans + q (Best et al.)

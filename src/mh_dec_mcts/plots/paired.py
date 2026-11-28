@@ -70,15 +70,21 @@ def merge(results: list[dict]) -> dict:
     """Several results of the same runs as one (conditions of later results appended, duplicates
     of a condition id dropped): planners run in separate folders can be paired. Every condition
     must cover the same run seeds and steps as the others of its team setting."""
+    def runs_of(c):
+        return tuple(r["run_seed"] for r in c["runs"]), c["steps"]
+
     out = {**results[0], "conditions": list(results[0]["conditions"])}
-    ids = {c["id"] for c in out["conditions"]}
+    ids = {c["id"]: c for c in out["conditions"]}
     for res in results[1:]:
         for c in res["conditions"]:
             if c["id"] not in ids:
                 out["conditions"].append(c)
-                ids.add(c["id"])
+                ids[c["id"]] = c
+            elif runs_of(ids[c["id"]]) != runs_of(c):
+                raise ValueError(f"{c['planner']} (n={c['n']}) is in two results on different runs: "
+                                 "merge only results of the same seed, runs and steps")
     for g, kc in groups(out).items():
-        seeds = {(tuple(r["run_seed"] for r in c["runs"]), c["steps"]) for _, c in kc}
+        seeds = {runs_of(c) for _, c in kc}
         if len(seeds) > 1:
             raise ValueError(f"{title(out, g)}: conditions on different runs or steps, cannot pair them")
     return out

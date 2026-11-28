@@ -231,7 +231,7 @@ def parser() -> argparse.ArgumentParser:
     ap.add_argument("--steps", type=int, help="default: the config's run.steps")
     ap.add_argument("--weights", choices=["none", "equal", "biased", "adaptive"], help="override run.weights")
     ap.add_argument("--r", type=float, help="override field.r (Gaussian cluster radius)")
-    ap.add_argument("--start", choices=["paper", "legacy", "random"], help="override agents.start")
+    ap.add_argument("--start", choices=["paper", "legacy", "random", "depot"], help="override agents.start")
     ap.add_argument("--seed", type=int, help="override the config's seed (run i uses seed + i)")
     ap.add_argument("--jobs", type=int, default=os.cpu_count())
     ap.add_argument("--late", type=int, default=10, help="steps after which a first sighting counts as backfill")

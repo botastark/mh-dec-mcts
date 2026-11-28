@@ -1,0 +1,5 @@
+setting                          planner                          runs                avg MSE (vs ref %)        steps to MSE 0.01 (vs ref %)         steps to MSE 0.002 (vs ref %)  stalled worst avg MSE  CPU s/step
+swarm_rect IGd_BM_R5, 1 UAV      greedy                             20  0.1075 +- 0.0057 ( +0.0 +-  0.0)    84.2 +- 5.3 ( +0.0 +-  0.0) [19]        nan +- nan ( +0.0 +-  0.0) [0]     0.20        0.1366       0.064
+swarm_rect IGd_BM_R5, 1 UAV      decmcts:horizon=4,rollout=greedy   20  0.1034 +- 0.0019 ( -3.8 +-  6.0)     92.2 +- 5.0 ( +6.2 +- 14.6) [4]        nan +- nan ( +nan +-  nan) [0]     0.05        0.1133       1.214
+swarm_rect IGd_BM_R5, 1 UAV      mhmcts:horizon=4,rollout=greedy    20  0.1094 +- 0.0025 ( +1.7 +-  6.3)     79.0 +- nan (-23.8 +-  nan) [1]        nan +- nan ( +nan +-  nan) [0]     0.05        0.1228       3.753
+[k] = runs that reached the level (steps averaged over those; % over the runs where both did)

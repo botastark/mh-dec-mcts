@@ -1,0 +1,8 @@
+setting                          planner                                        runs                avg MSE (vs ref %)        steps to MSE 0.01 (vs ref %)         steps to MSE 0.002 (vs ref %)  stalled worst avg MSE  CPU s/step
+swarm_rect IGd_BM_R5, 4 UAVs     decmcts:horizon=4,rollout=greedy                 20  0.0583 +- 0.0026 ( +0.0 +-  0.0)         48.4 +- 8.6 ( +0.0 +-  0.0)      70.6 +- 5.6 ( +0.0 +-  0.0) [16]     0.00        0.0737       0.558
+swarm_rect IGd_BM_R5, 4 UAVs     greedy                                           20  0.0577 +- 0.0022 ( -1.1 +-  5.0)         42.6 +- 6.6 (-11.9 +- 21.6)      63.9 +- 4.7 ( -9.7 +-  9.9) [19]     0.00        0.0690       0.222
+swarm_rect IGd_BM_R5, 4 UAVs     decmcts:horizon=4,rollout=greedy,stride=2        20  0.0583 +- 0.0018 ( +0.1 +-  5.5)         51.0 +- 5.9 ( +5.5 +- 22.5)           72.7 +- 4.0 ( +0.5 +- 11.3)     0.00        0.0646       1.584
+swarm_rect IGd_BM_R5, 4 UAVs     decmcts:horizon=4,rollout=greedy,iterations=40   20  0.0562 +- 0.0021 ( -3.7 +-  2.6)         42.5 +- 6.7 (-12.0 +- 11.2)      72.6 +- 7.3 ( -3.8 +-  9.3) [18]     0.00        0.0684       1.422
+swarm_rect IGd_BM_R5, 4 UAVs     decmcts:horizon=8,rollout=greedy                 20  0.0571 +- 0.0019 ( -2.0 +-  4.5)         48.5 +- 5.8 ( +0.2 +- 16.8)      83.2 +- 3.7 (+17.5 +- 10.0) [17]     0.00        0.0673       1.124
+swarm_rect IGd_BM_R5, 4 UAVs     decmcts:horizon=16,rollout=greedy                20  0.0556 +- 0.0009 ( -4.7 +-  4.2)         41.5 +- 4.2 (-14.3 +- 21.0)      82.9 +- 7.3 (+15.6 +- 15.0) [11]     0.00        0.0609       2.252
+[k] = runs that reached the level (steps averaged over those; % over the runs where both did)

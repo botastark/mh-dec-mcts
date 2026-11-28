@@ -70,7 +70,7 @@ def test_mh_keys_go_to_mh_the_rest_to_mcts(monkeypatch):
     class Stop(Exception):
         pass
 
-    def fake_make_planner(name, cfg, sc, range_):
+    def fake_make_planner(name, cfg, sc, range_, base=None):
         seen.update(name=name, mcts=cfg["mcts"], mh=cfg["mh"])
         raise Stop
 
@@ -119,3 +119,28 @@ def test_run_py_smoke(tmp_path):
     with np.load(tmp_path / "t/results.npz") as z:  # always saved: everything the figures need
         assert {"c0_r0_poses", "c0_r0_first", "c0_r0_uav_mse", "c0_r0_uav_alt", "truth_r0"} <= set(z.files)
         assert z["c0_r0_uav_mse"].shape == (3, 1) and "c0_r0_beliefs" not in z.files  # beliefs: --save-beliefs
+
+
+def test_interrupted_run_resumes_from_saved_runs(tmp_path, monkeypatch):
+    """Runs are saved as they finish; after a crash the same command recomputes none of them and
+    writes the same results, then removes the saved runs."""
+    argv = [SWARM, "--setting", "IGd_BM_R5", "--n", "1", "--planners", "greedy", "--runs", "2", "--steps", "3",
+            "--jobs", "1", "--out", str(tmp_path), "--tag", "t"]
+
+    def crash(*a, **k):
+        raise RuntimeError("crash before the results are written")
+
+    monkeypatch.setattr(run, "save_results", crash)
+    with pytest.raises(RuntimeError):
+        run.main(argv)
+    assert len(list((tmp_path / "t/_partial").glob("*.pkl.gz"))) == 2
+    monkeypatch.undo()
+
+    def no_rerun(*a, **k):
+        raise AssertionError("a saved run was computed again")
+
+    monkeypatch.setattr(run, "job_run", no_rerun)
+    run.main(argv)
+    d = json.loads((tmp_path / "t/results.json").read_text())
+    assert [r["run"] for r in d["conditions"][0]["runs"]] == [0, 1]
+    assert not (tmp_path / "t/_partial").exists()

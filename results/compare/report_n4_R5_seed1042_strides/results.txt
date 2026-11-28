@@ -1,0 +1,22 @@
+swarm_rect IGd_BM_R5, 4 UAVs: 20 runs x 100 steps (mean +- std over runs; vs the first planner: paired difference +- s.e.; nan = never reached)
+                             planner  steps to 80% cov   to 95%    backfill %   avg MSE         vs greedy (paired)  final MSE mean alt       stall  stalled incomplete      plan s/step
+                              greedy        18 +-   1     22     3.9 +- 2.8    0.0604 +0.0000 +- 0.0000 ( +0.0%)    0.00048    19.6m   7.5 +- 0.8     0/20       0/20    0.231 +- 0.069
+                     greedy:stride=8        18 +-   1     23     4.6 +- 2.2    0.0598 -0.0007 +- 0.0013 ( -1.1%)    0.00133    18.5m   7.5 +- 1.0     0/20       0/20    0.012 +- 0.004
+    decmcts:horizon=4,rollout=greedy        18 +-   1     22     2.3 +- 0.8    0.0581 -0.0024 +- 0.0013 ( -3.9%)    0.00018    20.5m   7.8 +- 1.2     0/20       0/20   15.088 +- 4.123
+decmcts:horizon=4,rollout=greedy,stride=8        18 +-   1     23     2.5 +- 1.0    0.0569 -0.0035 +- 0.0014 ( -5.8%)    0.00113    21.9m   7.8 +- 1.2     0/20       0/20    0.612 +- 0.142
+     mhmcts:horizon=4,rollout=greedy        18 +-   1     24     4.2 +- 1.7    0.0559 -0.0046 +- 0.0012 ( -7.5%)    0.00032    20.3m   7.7 +- 1.0     0/20       0/20   17.683 +- 4.140
+
+                     avg MSE per run   median      std  90th pct    worst  stall >= trap  avg MSE of stalled runs
+                              greedy   0.0602   0.0049    0.0668   0.0679          0/20                      nan
+                     greedy:stride=8   0.0599   0.0035    0.0635   0.0653          0/20                      nan
+    decmcts:horizon=4,rollout=greedy   0.0576   0.0044    0.0641   0.0648          0/20                      nan
+decmcts:horizon=4,rollout=greedy,stride=8   0.0567   0.0032    0.0613   0.0628          0/20                      nan
+     mhmcts:horizon=4,rollout=greedy   0.0557   0.0013    0.0571   0.0603          0/20                      nan
+
+                                team        overlap   connectivity   misalignment      balance
+                              greedy   0.147 +-0.055   0.456 +-0.113   0.010 +-0.003  0.14 +-0.07
+                     greedy:stride=8   0.118 +-0.037   0.445 +-0.119   0.010 +-0.003  0.11 +-0.04
+    decmcts:horizon=4,rollout=greedy   0.208 +-0.091   0.494 +-0.126   0.009 +-0.003  0.09 +-0.04
+decmcts:horizon=4,rollout=greedy,stride=8   0.266 +-0.070   0.566 +-0.107   0.009 +-0.002  0.08 +-0.04
+     mhmcts:horizon=4,rollout=greedy   0.221 +-0.066   0.519 +-0.085   0.007 +-0.000  0.12 +-0.06
+

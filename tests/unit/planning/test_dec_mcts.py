@@ -131,6 +131,37 @@ def test_each_uav_plans_at_its_own_stride():
     assert dec.last_strides == [4, 8] and len(acts) == 2
 
 
+def test_sgreedy_scores_what_dec_mcts_sees():
+    """Greedy IG at stride 1 is the paper's footprint sum; at stride 4 it equals the Dec-MCTS
+    objective on the same strided grid (sgreedy: same view of the belief, greedy choice)."""
+    from mh_dec_mcts.planning.planners import GreedyIG
+
+    sc = scen()
+    b = np.random.default_rng(1).uniform(0.05, 0.95, sc.grid.shape)
+    pose = Pose(6, 6, 2)
+    full = GreedyIG(sc.lattice, sc.rates).scores(b, pose)
+    for a, v in full.items():
+        q = sc.lattice.step(pose, a)
+        i0, i1, j0, j1 = sc.lattice.footprint(q)
+        assert v == float(np.sum(info_gain(b[i0:i1, j0:j1], *sc.rates.at(q.k))))
+    pg = PlanGrid(b, sc.lattice, sc.rates, 4)
+    strided = GreedyIG(sc.lattice, sc.rates, stride=4).scores(b, pose)
+    for a, v in strided.items():
+        assert v == pytest.approx(pg.gain(pg.new(np.random.default_rng(0)), sc.lattice.step(pose, a)), rel=1e-6)
+        assert v == pytest.approx(full[a], rel=0.3)  # a coarse view of the same sum
+
+
+def test_greedy_spec_overrides_reach_the_greedy_planner():
+    from mh_dec_mcts.planning.planners import IGd, Independent
+
+    sc = scen()
+    ig = make_planner("ig", {**CFG, "greedy": {"stride": 4}}, sc)
+    assert isinstance(ig, Independent) and ig.policies[0].stride == 4
+    igd = make_planner("igd", {**CFG, "greedy": {"stride": 2}}, sc)
+    assert isinstance(igd, IGd) and igd.g.stride == 2
+    assert make_planner("ig", CFG, sc).policies[0].stride == 1  # default: full grid
+
+
 # ------------------------------------------------------------------ team planning
 def test_actions_admissible_and_reproducible():
     sc = scen(3)

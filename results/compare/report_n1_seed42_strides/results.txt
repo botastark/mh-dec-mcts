@@ -1,0 +1,23 @@
+swarm_rect IGd_BM_R5, 1 UAV: 20 runs x 100 steps (mean +- std over runs; vs the first planner: paired difference +- s.e.; nan = never reached)
+                             planner  steps to 80% cov   to 95%    backfill %   avg MSE         vs greedy (paired)  final MSE mean alt       stall  stalled incomplete      plan s/step
+                              greedy        56 +-   4     65    34.6 +- 9.0    0.1076 +0.0000 +- 0.0000 ( +0.0%)    0.01707    20.6m  12.5 +- 12.9     3/20       3/20    0.058 +- 0.014
+                     greedy:stride=8        56 +-   5     70    37.3 +- 7.7    0.1049 -0.0027 +- 0.0028 ( -2.5%)    0.00814    20.7m   8.0 +- 2.1     0/20       1/20    0.005 +- 0.001
+    decmcts:horizon=4,rollout=greedy        57 +-   9     74    34.8 +- 3.9    0.1044 -0.0032 +- 0.0044 ( -3.0%)    0.01555    20.4m   8.4 +- 3.1     1/20       4/20    4.147 +- 0.599
+decmcts:horizon=4,rollout=greedy,stride=2        55 +-   1     74    35.1 +- 5.0    0.1036 -0.0040 +- 0.0037 ( -3.7%)    0.01439    20.7m   8.0 +- 2.6     1/20       3/20    0.783 +- 0.108
+decmcts:horizon=4,rollout=greedy,stride=4        55 +-   4     75    34.8 +- 3.1    0.1039 -0.0037 +- 0.0038 ( -3.5%)    0.01439    20.7m   8.2 +- 2.4     1/20       4/20    0.241 +- 0.036
+decmcts:horizon=4,rollout=greedy,stride=8        58 +-   9     78    32.1 +- 6.4    0.1072 -0.0004 +- 0.0031 ( -0.4%)    0.02016    21.1m  10.1 +- 6.4     2/20       6/20    0.126 +- 0.006
+decmcts:horizon=4,rollout=greedy,stride=8,stride_fine=1,stride_cov=0.9        58 +-   9     79    32.4 +- 6.5    0.1071 -0.0005 +- 0.0031 ( -0.4%)    0.02023    20.7m  10.1 +- 6.4     2/20       4/20    1.312 +- 0.597
+     mhmcts:horizon=4,rollout=greedy        57 +-   5     80    20.6 +- 5.8    0.1108 +0.0032 +- 0.0038 ( +3.0%)    0.02007    21.3m   8.2 +- 1.8     0/20       5/20   11.421 +- 2.429
+mhmcts:horizon=4,rollout=greedy,stride=8        57 +-   5     78    23.4 +- 6.2    0.1103 +0.0027 +- 0.0035 ( +2.5%)    0.01921    21.2m   8.5 +- 2.7     1/20       2/20    0.211 +- 0.027
+
+                     avg MSE per run   median      std  90th pct    worst  stall >= trap  avg MSE of stalled runs
+                              greedy   0.0969   0.0191    0.1337   0.1598          3/20                   0.1492
+                     greedy:stride=8   0.1019   0.0095    0.1210   0.1289          0/20                      nan
+    decmcts:horizon=4,rollout=greedy   0.1025   0.0067    0.1123   0.1244          1/20                   0.1183
+decmcts:horizon=4,rollout=greedy,stride=2   0.1019   0.0053    0.1112   0.1166          1/20                   0.1110
+decmcts:horizon=4,rollout=greedy,stride=4   0.1024   0.0066    0.1077   0.1272          1/20                   0.1272
+decmcts:horizon=4,rollout=greedy,stride=8   0.1048   0.0083    0.1193   0.1290          2/20                   0.1221
+decmcts:horizon=4,rollout=greedy,stride=8,stride_fine=1,stride_cov=0.9   0.1046   0.0082    0.1193   0.1290          2/20                   0.1221
+     mhmcts:horizon=4,rollout=greedy   0.1070   0.0072    0.1199   0.1313          0/20                      nan
+mhmcts:horizon=4,rollout=greedy,stride=8   0.1076   0.0077    0.1196   0.1314          1/20                   0.1153
+

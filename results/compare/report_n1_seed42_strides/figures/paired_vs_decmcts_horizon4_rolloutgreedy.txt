@@ -1,0 +1,73 @@
+setting                            planner                                                                metric                     diff           % of ref  lower/ties/runs p (Wilcoxon)
+swarm_rect IGd_BM_R5, 1 UAV        greedy                                                                 avg MSE                +0.00319     +3.1 +-   8.4%    14/ 0/20          0.596
+swarm_rect IGd_BM_R5, 1 UAV        greedy                                                                 MSE before split       +0.00405     +3.0 +-   4.7%    14/ 0/20          0.898
+swarm_rect IGd_BM_R5, 1 UAV        greedy                                                                 MSE after split        +0.00076     +3.5 +-  77.9%    16/ 0/20          0.143
+swarm_rect IGd_BM_R5, 1 UAV        greedy                                                                 final MSE              +0.00152     +9.8 +-  77.3%    17/ 0/20          0.076
+swarm_rect IGd_BM_R5, 1 UAV        greedy                                                                 steps to MSE 0.01     -15.00000    -16.4 +-  30.0%     2/ 0/ 3          0.500
+swarm_rect IGd_BM_R5, 1 UAV        greedy                                                                 steps to MSE 0.002         +nan     +nan +-   nan%     0/ 0/ 0          1.000
+swarm_rect IGd_BM_R5, 1 UAV        greedy                                                                 steps to 95 % cov.    -11.38462    -15.4 +-  12.6%     8/ 3/13          0.064
+swarm_rect IGd_BM_R5, 1 UAV        greedy                                                                 mean altitude          +0.19486     +1.0 +-   3.1%     6/ 0/20          0.232
+swarm_rect IGd_BM_R5, 1 UAV        greedy                                                                 CPU s / step           -4.08668    -95.7 +-   6.4%    20/ 0/20          0.000 *
+swarm_rect IGd_BM_R5, 1 UAV        greedy:stride=8                                                        avg MSE                +0.00049     +0.5 +-   4.6%    12/ 0/20          0.927
+swarm_rect IGd_BM_R5, 1 UAV        greedy:stride=8                                                        MSE before split       +0.00379     +2.8 +-   3.4%    11/ 0/20          0.277
+swarm_rect IGd_BM_R5, 1 UAV        greedy:stride=8                                                        MSE after split        -0.00890    -41.4 +-  30.4%    16/ 0/20          0.017 *
+swarm_rect IGd_BM_R5, 1 UAV        greedy:stride=8                                                        final MSE              -0.00741    -47.6 +-  19.3%    19/ 0/20          0.000 *
+swarm_rect IGd_BM_R5, 1 UAV        greedy:stride=8                                                        steps to MSE 0.01     -14.00000    -15.3 +-  29.0%     2/ 0/ 3          0.500
+swarm_rect IGd_BM_R5, 1 UAV        greedy:stride=8                                                        steps to MSE 0.002         +nan     +nan +-   nan%     0/ 0/ 0          1.000
+swarm_rect IGd_BM_R5, 1 UAV        greedy:stride=8                                                        steps to 95 % cov.     -3.66667     -5.0 +-  12.5%     8/ 1/15          0.551
+swarm_rect IGd_BM_R5, 1 UAV        greedy:stride=8                                                        mean altitude          +0.37889     +1.9 +-   3.5%     6/ 0/20          0.277
+swarm_rect IGd_BM_R5, 1 UAV        greedy:stride=8                                                        CPU s / step           -4.12556    -96.6 +-   6.4%    20/ 0/20          0.000 *
+swarm_rect IGd_BM_R5, 1 UAV        decmcts:horizon=4,rollout=greedy,stride=2                              avg MSE                -0.00078     -0.7 +-   2.6%    12/ 0/20          0.430
+swarm_rect IGd_BM_R5, 1 UAV        decmcts:horizon=4,rollout=greedy,stride=2                              MSE before split       -0.00020     -0.2 +-   1.5%    12/ 0/20          0.701
+swarm_rect IGd_BM_R5, 1 UAV        decmcts:horizon=4,rollout=greedy,stride=2                              MSE after split        -0.00242    -11.3 +-  24.4%    13/ 0/20          0.294
+swarm_rect IGd_BM_R5, 1 UAV        decmcts:horizon=4,rollout=greedy,stride=2                              final MSE              -0.00116     -7.5 +-  16.5%    11/ 0/20          0.368
+swarm_rect IGd_BM_R5, 1 UAV        decmcts:horizon=4,rollout=greedy,stride=2                              steps to MSE 0.01          +nan     +nan +-   nan%     0/ 0/ 0          1.000
+swarm_rect IGd_BM_R5, 1 UAV        decmcts:horizon=4,rollout=greedy,stride=2                              steps to MSE 0.002         +nan     +nan +-   nan%     0/ 0/ 0          1.000
+swarm_rect IGd_BM_R5, 1 UAV        decmcts:horizon=4,rollout=greedy,stride=2                              steps to 95 % cov.     -4.14286     -5.6 +-  12.7%     9/ 2/14          0.433
+swarm_rect IGd_BM_R5, 1 UAV        decmcts:horizon=4,rollout=greedy,stride=2                              mean altitude          +0.36535     +1.8 +-   2.2%     7/ 0/20          0.113
+swarm_rect IGd_BM_R5, 1 UAV        decmcts:horizon=4,rollout=greedy,stride=2                              CPU s / step           -3.34789    -78.4 +-   6.8%    20/ 0/20          0.000 *
+swarm_rect IGd_BM_R5, 1 UAV        decmcts:horizon=4,rollout=greedy,stride=4                              avg MSE                -0.00053     -0.5 +-   3.6%     9/ 0/20          0.956
+swarm_rect IGd_BM_R5, 1 UAV        decmcts:horizon=4,rollout=greedy,stride=4                              MSE before split       +0.00027     +0.2 +-   2.7%     7/ 0/20          0.596
+swarm_rect IGd_BM_R5, 1 UAV        decmcts:horizon=4,rollout=greedy,stride=4                              MSE after split        -0.00281    -13.1 +-  24.4%     9/ 0/20          0.701
+swarm_rect IGd_BM_R5, 1 UAV        decmcts:horizon=4,rollout=greedy,stride=4                              final MSE              -0.00116     -7.5 +-  18.2%    12/ 0/20          0.409
+swarm_rect IGd_BM_R5, 1 UAV        decmcts:horizon=4,rollout=greedy,stride=4                              steps to MSE 0.01     -30.00000    -32.7 +-   nan%     1/ 0/ 1          1.000
+swarm_rect IGd_BM_R5, 1 UAV        decmcts:horizon=4,rollout=greedy,stride=4                              steps to MSE 0.002         +nan     +nan +-   nan%     0/ 0/ 0          1.000
+swarm_rect IGd_BM_R5, 1 UAV        decmcts:horizon=4,rollout=greedy,stride=4                              steps to 95 % cov.     +4.23077     +5.7 +-  12.2%     3/ 3/13          0.391
+swarm_rect IGd_BM_R5, 1 UAV        decmcts:horizon=4,rollout=greedy,stride=4                              mean altitude          +0.35182     +1.7 +-   1.6%     6/ 1/20          0.049 *
+swarm_rect IGd_BM_R5, 1 UAV        decmcts:horizon=4,rollout=greedy,stride=4                              CPU s / step           -3.88648    -91.0 +-   6.4%    20/ 0/20          0.000 *
+swarm_rect IGd_BM_R5, 1 UAV        decmcts:horizon=4,rollout=greedy,stride=8                              avg MSE                +0.00277     +2.6 +-   4.2%     7/ 0/20          0.165
+swarm_rect IGd_BM_R5, 1 UAV        decmcts:horizon=4,rollout=greedy,stride=8                              MSE before split       +0.00200     +1.5 +-   2.4%     7/ 0/20          0.133
+swarm_rect IGd_BM_R5, 1 UAV        decmcts:horizon=4,rollout=greedy,stride=8                              MSE after split        +0.00496    +23.1 +-  38.5%     7/ 0/20          0.245
+swarm_rect IGd_BM_R5, 1 UAV        decmcts:horizon=4,rollout=greedy,stride=8                              final MSE              +0.00461    +29.6 +-  36.6%     6/ 0/20          0.154
+swarm_rect IGd_BM_R5, 1 UAV        decmcts:horizon=4,rollout=greedy,stride=8                              steps to MSE 0.01     +10.50000    +11.5 +-  18.2%     0/ 0/ 2          0.500
+swarm_rect IGd_BM_R5, 1 UAV        decmcts:horizon=4,rollout=greedy,stride=8                              steps to MSE 0.002         +nan     +nan +-   nan%     0/ 0/ 0          1.000
+swarm_rect IGd_BM_R5, 1 UAV        decmcts:horizon=4,rollout=greedy,stride=8                              steps to 95 % cov.     +3.50000     +4.7 +-  11.2%     5/ 1/12          0.561
+swarm_rect IGd_BM_R5, 1 UAV        decmcts:horizon=4,rollout=greedy,stride=8                              mean altitude          +0.79295     +3.9 +-   2.0%     4/ 1/20          0.002 *
+swarm_rect IGd_BM_R5, 1 UAV        decmcts:horizon=4,rollout=greedy,stride=8                              CPU s / step           -4.00440    -93.8 +-   6.5%    20/ 0/20          0.000 *
+swarm_rect IGd_BM_R5, 1 UAV        decmcts:horizon=4,rollout=greedy,stride=8,stride_fine=1,stride_cov=0.9 avg MSE                +0.00274     +2.6 +-   4.2%     6/ 0/20          0.143
+swarm_rect IGd_BM_R5, 1 UAV        decmcts:horizon=4,rollout=greedy,stride=8,stride_fine=1,stride_cov=0.9 MSE before split       +0.00200     +1.5 +-   2.4%     7/ 0/20          0.133
+swarm_rect IGd_BM_R5, 1 UAV        decmcts:horizon=4,rollout=greedy,stride=8,stride_fine=1,stride_cov=0.9 MSE after split        +0.00484    +22.5 +-  38.4%     7/ 0/20          0.189
+swarm_rect IGd_BM_R5, 1 UAV        decmcts:horizon=4,rollout=greedy,stride=8,stride_fine=1,stride_cov=0.9 final MSE              +0.00468    +30.1 +-  35.7%     7/ 0/20          0.143
+swarm_rect IGd_BM_R5, 1 UAV        decmcts:horizon=4,rollout=greedy,stride=8,stride_fine=1,stride_cov=0.9 steps to MSE 0.01     +10.00000    +10.9 +-  21.4%     0/ 1/ 2          1.000
+swarm_rect IGd_BM_R5, 1 UAV        decmcts:horizon=4,rollout=greedy,stride=8,stride_fine=1,stride_cov=0.9 steps to MSE 0.002         +nan     +nan +-   nan%     0/ 0/ 0          1.000
+swarm_rect IGd_BM_R5, 1 UAV        decmcts:horizon=4,rollout=greedy,stride=8,stride_fine=1,stride_cov=0.9 steps to 95 % cov.     +5.23077     +7.1 +-  11.8%     4/ 2/13          0.400
+swarm_rect IGd_BM_R5, 1 UAV        decmcts:horizon=4,rollout=greedy,stride=8,stride_fine=1,stride_cov=0.9 mean altitude          +0.38701     +1.9 +-   2.1%     8/ 1/20          0.121
+swarm_rect IGd_BM_R5, 1 UAV        decmcts:horizon=4,rollout=greedy,stride=8,stride_fine=1,stride_cov=0.9 CPU s / step           -2.81803    -66.0 +-  10.0%    20/ 0/20          0.000 *
+swarm_rect IGd_BM_R5, 1 UAV        mhmcts:horizon=4,rollout=greedy                                        avg MSE                +0.00643     +6.2 +-   4.2%     4/ 0/20          0.009 *
+swarm_rect IGd_BM_R5, 1 UAV        mhmcts:horizon=4,rollout=greedy                                        MSE before split       +0.00692     +5.2 +-   3.1%     3/ 0/20          0.003 *
+swarm_rect IGd_BM_R5, 1 UAV        mhmcts:horizon=4,rollout=greedy                                        MSE after split        +0.00502    +23.4 +-  25.9%     7/ 0/20          0.090
+swarm_rect IGd_BM_R5, 1 UAV        mhmcts:horizon=4,rollout=greedy                                        final MSE              +0.00452    +29.1 +-  19.1%     8/ 0/20          0.033 *
+swarm_rect IGd_BM_R5, 1 UAV        mhmcts:horizon=4,rollout=greedy                                        steps to MSE 0.01          +nan     +nan +-   nan%     0/ 0/ 0          1.000
+swarm_rect IGd_BM_R5, 1 UAV        mhmcts:horizon=4,rollout=greedy                                        steps to MSE 0.002         +nan     +nan +-   nan%     0/ 0/ 0          1.000
+swarm_rect IGd_BM_R5, 1 UAV        mhmcts:horizon=4,rollout=greedy                                        steps to 95 % cov.     +6.00000     +8.1 +-  13.6%     5/ 0/12          0.368
+swarm_rect IGd_BM_R5, 1 UAV        mhmcts:horizon=4,rollout=greedy                                        mean altitude          +0.95804     +4.7 +-   2.6%     2/ 1/20          0.002 *
+swarm_rect IGd_BM_R5, 1 UAV        mhmcts:horizon=4,rollout=greedy                                        CPU s / step           +7.27991   +170.5 +-  23.3%     0/ 0/20          0.000 *
+swarm_rect IGd_BM_R5, 1 UAV        mhmcts:horizon=4,rollout=greedy,stride=8                               avg MSE                +0.00590     +5.7 +-   3.7%     2/ 0/20          0.005 *
+swarm_rect IGd_BM_R5, 1 UAV        mhmcts:horizon=4,rollout=greedy,stride=8                               MSE before split       +0.00635     +4.8 +-   2.6%     3/ 0/20          0.001 *
+swarm_rect IGd_BM_R5, 1 UAV        mhmcts:horizon=4,rollout=greedy,stride=8                               MSE after split        +0.00461    +21.5 +-  29.5%     4/ 0/20          0.030 *
+swarm_rect IGd_BM_R5, 1 UAV        mhmcts:horizon=4,rollout=greedy,stride=8                               final MSE              +0.00366    +23.5 +-  23.8%     7/ 0/20          0.036 *
+swarm_rect IGd_BM_R5, 1 UAV        mhmcts:horizon=4,rollout=greedy,stride=8                               steps to MSE 0.01          +nan     +nan +-   nan%     0/ 0/ 0          1.000
+swarm_rect IGd_BM_R5, 1 UAV        mhmcts:horizon=4,rollout=greedy,stride=8                               steps to MSE 0.002         +nan     +nan +-   nan%     0/ 0/ 0          1.000
+swarm_rect IGd_BM_R5, 1 UAV        mhmcts:horizon=4,rollout=greedy,stride=8                               steps to 95 % cov.     +3.50000     +4.7 +-  10.7%     5/ 0/14          0.362
+swarm_rect IGd_BM_R5, 1 UAV        mhmcts:horizon=4,rollout=greedy,stride=8                               mean altitude          +0.89038     +4.4 +-   3.3%     4/ 1/20          0.008 *
+swarm_rect IGd_BM_R5, 1 UAV        mhmcts:horizon=4,rollout=greedy,stride=8                               CPU s / step           -3.90863    -91.6 +-   6.4%    20/ 0/20          0.000 *

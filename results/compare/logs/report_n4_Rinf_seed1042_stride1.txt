@@ -1,0 +1,78 @@
+swarm_rect: 3 conditions x 20 runs x 100 steps on 16 processes
+[  1/60   2%  1m31s elapsed, ~5m26s left + untimed: decmcts:horizon=4,rollout=greedy|n=4|sharing=BS|range=32|setting=IG_BS_Rinf, mhmcts:horizon=4,rollout=greedy|n=4|sharing=BS|range=32|setting=IG_BS_Rinf]  greedy|n=4|sharing=BS|range=32|setting=IG_BS_Rinf run  1: avg MSE 0.0359, final 0.0000, stall   0        , 0.87 s/step
+[  2/60   3%  1m31s elapsed, ~5m21s left + untimed: decmcts:horizon=4,rollout=greedy|n=4|sharing=BS|range=32|setting=IG_BS_Rinf, mhmcts:horizon=4,rollout=greedy|n=4|sharing=BS|range=32|setting=IG_BS_Rinf]  greedy|n=4|sharing=BS|range=32|setting=IG_BS_Rinf run  5: avg MSE 0.0376, final 0.0000, stall   0        , 0.88 s/step
+[  3/60   5%  1m32s elapsed, ~5m17s left + untimed: decmcts:horizon=4,rollout=greedy|n=4|sharing=BS|range=32|setting=IG_BS_Rinf, mhmcts:horizon=4,rollout=greedy|n=4|sharing=BS|range=32|setting=IG_BS_Rinf]  greedy|n=4|sharing=BS|range=32|setting=IG_BS_Rinf run  2: avg MSE 0.0369, final 0.0000, stall   0        , 0.89 s/step
+[  4/60   7%  1m35s elapsed, ~5m15s left + untimed: decmcts:horizon=4,rollout=greedy|n=4|sharing=BS|range=32|setting=IG_BS_Rinf, mhmcts:horizon=4,rollout=greedy|n=4|sharing=BS|range=32|setting=IG_BS_Rinf]  greedy|n=4|sharing=BS|range=32|setting=IG_BS_Rinf run  4: avg MSE 0.0356, final 0.0000, stall   0        , 0.92 s/step
+[  5/60   8%  1m37s elapsed, ~5m12s left + untimed: decmcts:horizon=4,rollout=greedy|n=4|sharing=BS|range=32|setting=IG_BS_Rinf, mhmcts:horizon=4,rollout=greedy|n=4|sharing=BS|range=32|setting=IG_BS_Rinf]  greedy|n=4|sharing=BS|range=32|setting=IG_BS_Rinf run  3: avg MSE 0.0350, final 0.0000, stall   0        , 0.93 s/step
+[  6/60  10%  1m43s elapsed, ~5m12s left + untimed: decmcts:horizon=4,rollout=greedy|n=4|sharing=BS|range=32|setting=IG_BS_Rinf, mhmcts:horizon=4,rollout=greedy|n=4|sharing=BS|range=32|setting=IG_BS_Rinf]  greedy|n=4|sharing=BS|range=32|setting=IG_BS_Rinf run  0: avg MSE 0.0398, final 0.0002, stall   0        , 0.99 s/step
+[  7/60  12%  3m04s elapsed, ~5m05s left + untimed: decmcts:horizon=4,rollout=greedy|n=4|sharing=BS|range=32|setting=IG_BS_Rinf, mhmcts:horizon=4,rollout=greedy|n=4|sharing=BS|range=32|setting=IG_BS_Rinf]  greedy|n=4|sharing=BS|range=32|setting=IG_BS_Rinf run  6: avg MSE 0.0402, final 0.0000, stall   0        , 0.89 s/step
+[  8/60  13%  3m21s elapsed, ~5m01s left + untimed: decmcts:horizon=4,rollout=greedy|n=4|sharing=BS|range=32|setting=IG_BS_Rinf, mhmcts:horizon=4,rollout=greedy|n=4|sharing=BS|range=32|setting=IG_BS_Rinf]  greedy|n=4|sharing=BS|range=32|setting=IG_BS_Rinf run  7: avg MSE 0.0382, final 0.0000, stall   0        , 0.95 s/step
+[  9/60  15%  30m40s elapsed, ~41m25s left + untimed: mhmcts:horizon=4,rollout=greedy|n=4|sharing=BS|range=32|setting=IG_BS_Rinf]  decmcts:horizon=4,rollout=greedy|n=4|sharing=BS|range=32|setting=IG_BS_Rinf run  6: avg MSE 0.0372, final 0.0000, stall   0        , 17.26 s/step
+[ 10/60  17%  31m41s elapsed, ~43m24s left + untimed: mhmcts:horizon=4,rollout=greedy|n=4|sharing=BS|range=32|setting=IG_BS_Rinf]  decmcts:horizon=4,rollout=greedy|n=4|sharing=BS|range=32|setting=IG_BS_Rinf run  5: avg MSE 0.0378, final 0.0000, stall   0        , 17.95 s/step
+[ 11/60  18%  31m48s elapsed, ~42m35s left + untimed: mhmcts:horizon=4,rollout=greedy|n=4|sharing=BS|range=32|setting=IG_BS_Rinf]  greedy|n=4|sharing=BS|range=32|setting=IG_BS_Rinf run  8: avg MSE 0.0402, final 0.0002, stall   0        , 0.65 s/step
+[ 12/60  20%  35m02s elapsed, ~44m13s left + untimed: mhmcts:horizon=4,rollout=greedy|n=4|sharing=BS|range=32|setting=IG_BS_Rinf]  decmcts:horizon=4,rollout=greedy|n=4|sharing=BS|range=32|setting=IG_BS_Rinf run  7: avg MSE 0.0372, final 0.0000, stall   0        , 19.03 s/step
+[ 13/60  22%  35m03s elapsed, ~46m00s left + untimed: mhmcts:horizon=4,rollout=greedy|n=4|sharing=BS|range=32|setting=IG_BS_Rinf]  decmcts:horizon=4,rollout=greedy|n=4|sharing=BS|range=32|setting=IG_BS_Rinf run  4: avg MSE 0.0365, final 0.0000, stall   0        , 20.83 s/step
+[ 14/60  23%  35m23s elapsed, ~46m56s left + untimed: mhmcts:horizon=4,rollout=greedy|n=4|sharing=BS|range=32|setting=IG_BS_Rinf]  decmcts:horizon=4,rollout=greedy|n=4|sharing=BS|range=32|setting=IG_BS_Rinf run  3: avg MSE 0.0368, final 0.0000, stall   0        , 21.02 s/step
+[ 15/60  25%  35m24s elapsed, ~47m16s left + untimed: mhmcts:horizon=4,rollout=greedy|n=4|sharing=BS|range=32|setting=IG_BS_Rinf]  decmcts:horizon=4,rollout=greedy|n=4|sharing=BS|range=32|setting=IG_BS_Rinf run  1: avg MSE 0.0354, final 0.0000, stall   0        , 21.03 s/step
+[ 16/60  27%  36m11s elapsed, ~46m09s left + untimed: mhmcts:horizon=4,rollout=greedy|n=4|sharing=BS|range=32|setting=IG_BS_Rinf]  greedy|n=4|sharing=BS|range=32|setting=IG_BS_Rinf run  9: avg MSE 0.0345, final 0.0000, stall   0        , 0.67 s/step
+[ 17/60  28%  36m48s elapsed, ~45m11s left + untimed: mhmcts:horizon=4,rollout=greedy|n=4|sharing=BS|range=32|setting=IG_BS_Rinf]  greedy|n=4|sharing=BS|range=32|setting=IG_BS_Rinf run 10: avg MSE 0.0381, final 0.0000, stall   0        , 0.81 s/step
+[ 18/60  30%  38m07s elapsed, ~45m31s left + untimed: mhmcts:horizon=4,rollout=greedy|n=4|sharing=BS|range=32|setting=IG_BS_Rinf]  decmcts:horizon=4,rollout=greedy|n=4|sharing=BS|range=32|setting=IG_BS_Rinf run  2: avg MSE 0.0373, final 0.0000, stall   0        , 22.68 s/step
+[ 19/60  32%  39m11s elapsed, ~45m36s left + untimed: mhmcts:horizon=4,rollout=greedy|n=4|sharing=BS|range=32|setting=IG_BS_Rinf]  decmcts:horizon=4,rollout=greedy|n=4|sharing=BS|range=32|setting=IG_BS_Rinf run  0: avg MSE 0.0380, final 0.0000, stall   0        , 23.29 s/step
+[ 20/60  33%  39m13s elapsed, ~44m36s left + untimed: mhmcts:horizon=4,rollout=greedy|n=4|sharing=BS|range=32|setting=IG_BS_Rinf]  greedy|n=4|sharing=BS|range=32|setting=IG_BS_Rinf run 11: avg MSE 0.0364, final 0.0000, stall   0        , 0.64 s/step
+[ 21/60  35%  41m43s elapsed, ~1h14m left]  mhmcts:horizon=4,rollout=greedy|n=4|sharing=BS|range=32|setting=IG_BS_Rinf run  6: avg MSE 0.0416, final 0.0000, stall   0        , 23.88 s/step
+[ 22/60  37%  43m06s elapsed, ~1h13m left]  mhmcts:horizon=4,rollout=greedy|n=4|sharing=BS|range=32|setting=IG_BS_Rinf run  2: avg MSE 0.0385, final 0.0000, stall   0        , 25.67 s/step
+[ 23/60  38%  43m10s elapsed, ~1h13m left]  greedy|n=4|sharing=BS|range=32|setting=IG_BS_Rinf run 12: avg MSE 0.0388, final 0.0000, stall   0        , 0.85 s/step
+[ 24/60  40%  44m16s elapsed, ~1h11m left]  mhmcts:horizon=4,rollout=greedy|n=4|sharing=BS|range=32|setting=IG_BS_Rinf run  3: avg MSE 0.0377, final 0.0000, stall   0        , 26.38 s/step
+[ 25/60  42%  44m43s elapsed, ~1h08m left]  mhmcts:horizon=4,rollout=greedy|n=4|sharing=BS|range=32|setting=IG_BS_Rinf run  7: avg MSE 0.0410, final 0.0000, stall   0        , 24.61 s/step
+[ 26/60  43%  44m46s elapsed, ~1h06m left]  mhmcts:horizon=4,rollout=greedy|n=4|sharing=BS|range=32|setting=IG_BS_Rinf run  0: avg MSE 0.0399, final 0.0000, stall   0        , 26.64 s/step
+[ 27/60  45%  45m00s elapsed, ~1h03m left]  mhmcts:horizon=4,rollout=greedy|n=4|sharing=BS|range=32|setting=IG_BS_Rinf run  5: avg MSE 0.0377, final 0.0001, stall   0        , 25.87 s/step
+[ 28/60  47%  45m24s elapsed, ~1h03m left]  greedy|n=4|sharing=BS|range=32|setting=IG_BS_Rinf run 13: avg MSE 0.0381, final 0.0000, stall   0        , 0.67 s/step
+[ 29/60  48%  45m32s elapsed, ~1h01m left]  mhmcts:horizon=4,rollout=greedy|n=4|sharing=BS|range=32|setting=IG_BS_Rinf run  1: avg MSE 0.0387, final 0.0000, stall   0        , 27.08 s/step
+[ 30/60  50%  46m04s elapsed, ~1h01m left]  greedy|n=4|sharing=BS|range=32|setting=IG_BS_Rinf run 14: avg MSE 0.0381, final 0.0001, stall   0        , 0.62 s/step
+[ 31/60  52%  46m49s elapsed, ~58m52s left]  mhmcts:horizon=4,rollout=greedy|n=4|sharing=BS|range=32|setting=IG_BS_Rinf run  4: avg MSE 0.0372, final 0.0000, stall   0        , 27.90 s/step
+[ 32/60  53%  47m01s elapsed, ~58m46s left]  greedy|n=4|sharing=BS|range=32|setting=IG_BS_Rinf run 15: avg MSE 0.0390, final 0.0000, stall   0        , 0.55 s/step
+[ 33/60  55%  53m00s elapsed, ~55m38s left]  decmcts:horizon=4,rollout=greedy|n=4|sharing=BS|range=32|setting=IG_BS_Rinf run  8: avg MSE 0.0378, final 0.0000, stall   0        , 12.72 s/step
+[ 34/60  57%  53m25s elapsed, ~55m33s left]  greedy|n=4|sharing=BS|range=32|setting=IG_BS_Rinf run 16: avg MSE 0.0377, final 0.0000, stall   0        , 0.24 s/step
+[ 35/60  58%  54m27s elapsed, ~52m39s left]  decmcts:horizon=4,rollout=greedy|n=4|sharing=BS|range=32|setting=IG_BS_Rinf run  9: avg MSE 0.0357, final 0.0000, stall   0        , 11.58 s/step
+[ 36/60  60%  54m42s elapsed, ~50m01s left]  decmcts:horizon=4,rollout=greedy|n=4|sharing=BS|range=32|setting=IG_BS_Rinf run 10: avg MSE 0.0376, final 0.0000, stall   0        , 11.07 s/step
+[ 37/60  62%  55m23s elapsed, ~49m56s left]  greedy|n=4|sharing=BS|range=32|setting=IG_BS_Rinf run 17: avg MSE 0.0385, final 0.0000, stall   0        , 0.39 s/step
+[ 38/60  63%  55m55s elapsed, ~47m15s left]  decmcts:horizon=4,rollout=greedy|n=4|sharing=BS|range=32|setting=IG_BS_Rinf run 13: avg MSE 0.0364, final 0.0000, stall   0        , 6.70 s/step
+[ 39/60  65%  55m56s elapsed, ~43m01s left]  mhmcts:horizon=4,rollout=greedy|n=4|sharing=BS|range=32|setting=IG_BS_Rinf run  8: avg MSE 0.0379, final 0.0000, stall   0        , 14.42 s/step
+[ 40/60  67%  56m33s elapsed, ~40m38s left]  decmcts:horizon=4,rollout=greedy|n=4|sharing=BS|range=32|setting=IG_BS_Rinf run 14: avg MSE 0.0377, final 0.0000, stall   0        , 6.67 s/step
+[ 41/60  68%  56m36s elapsed, ~40m34s left]  greedy|n=4|sharing=BS|range=32|setting=IG_BS_Rinf run 18: avg MSE 0.0357, final 0.0000, stall   0        , 0.38 s/step
+[ 42/60  70%  58m39s elapsed, ~38m26s left]  decmcts:horizon=4,rollout=greedy|n=4|sharing=BS|range=32|setting=IG_BS_Rinf run 15: avg MSE 0.0380, final 0.0000, stall   0        , 7.09 s/step
+[ 43/60  72%  58m49s elapsed, ~34m05s left]  mhmcts:horizon=4,rollout=greedy|n=4|sharing=BS|range=32|setting=IG_BS_Rinf run 14: avg MSE 0.0382, final 0.0000, stall   0        , 7.96 s/step
+[ 44/60  73%  59m10s elapsed, ~34m00s left]  greedy|n=4|sharing=BS|range=32|setting=IG_BS_Rinf run 19: avg MSE 0.0391, final 0.0001, stall   0        , 0.30 s/step
+[ 45/60  75%  59m30s elapsed, ~34m23s left]  decmcts:horizon=4,rollout=greedy|n=4|sharing=BS|range=32|setting=IG_BS_Rinf run 11: avg MSE 0.0375, final 0.0000, stall   0        , 12.17 s/step
+[ 46/60  77%  59m43s elapsed, ~33m10s left]  mhmcts:horizon=4,rollout=greedy|n=4|sharing=BS|range=32|setting=IG_BS_Rinf run 10: avg MSE 0.0383, final 0.0000, stall   0        , 13.71 s/step
+[ 47/60  78%  59m43s elapsed, ~33m33s left]  decmcts:horizon=4,rollout=greedy|n=4|sharing=BS|range=32|setting=IG_BS_Rinf run 12: avg MSE 0.0392, final 0.0000, stall   0        , 9.95 s/step
+[ 48/60  80%  1h00m elapsed, ~32m32s left]  mhmcts:horizon=4,rollout=greedy|n=4|sharing=BS|range=32|setting=IG_BS_Rinf run  9: avg MSE 0.0374, final 0.0000, stall   0        , 14.77 s/step
+[ 49/60  82%  1h00m elapsed, ~31m29s left]  mhmcts:horizon=4,rollout=greedy|n=4|sharing=BS|range=32|setting=IG_BS_Rinf run 11: avg MSE 0.0392, final 0.0000, stall   0        , 12.79 s/step
+[ 50/60  83%  1h01m elapsed, ~30m15s left]  mhmcts:horizon=4,rollout=greedy|n=4|sharing=BS|range=32|setting=IG_BS_Rinf run 15: avg MSE 0.0406, final 0.0001, stall   0        , 8.77 s/step
+[ 51/60  85%  1h01m elapsed, ~29m20s left]  mhmcts:horizon=4,rollout=greedy|n=4|sharing=BS|range=32|setting=IG_BS_Rinf run 12: avg MSE 0.0398, final 0.0000, stall   0        , 11.11 s/step
+[ 52/60  87%  1h02m elapsed, ~29m28s left]  decmcts:horizon=4,rollout=greedy|n=4|sharing=BS|range=32|setting=IG_BS_Rinf run 16: avg MSE 0.0376, final 0.0000, stall   0        , 5.16 s/step
+[ 53/60  88%  1h02m elapsed, ~28m29s left]  mhmcts:horizon=4,rollout=greedy|n=4|sharing=BS|range=32|setting=IG_BS_Rinf run 13: avg MSE 0.0386, final 0.0000, stall   0        , 10.41 s/step
+[ 54/60  90%  1h03m elapsed, ~28m52s left]  decmcts:horizon=4,rollout=greedy|n=4|sharing=BS|range=32|setting=IG_BS_Rinf run 17: avg MSE 0.0373, final 0.0000, stall   0        , 4.77 s/step
+[ 55/60  92%  1h03m elapsed, ~29m48s left]  decmcts:horizon=4,rollout=greedy|n=4|sharing=BS|range=32|setting=IG_BS_Rinf run 18: avg MSE 0.0365, final 0.0000, stall   0        , 4.44 s/step
+[ 56/60  93%  1h04m elapsed, ~28m24s left]  mhmcts:horizon=4,rollout=greedy|n=4|sharing=BS|range=32|setting=IG_BS_Rinf run 16: avg MSE 0.0391, final 0.0000, stall   0        , 6.04 s/step
+[ 57/60  95%  1h04m elapsed, ~26m57s left]  mhmcts:horizon=4,rollout=greedy|n=4|sharing=BS|range=32|setting=IG_BS_Rinf run 17: avg MSE 0.0392, final 0.0000, stall   0        , 5.25 s/step
+[ 58/60  97%  1h04m elapsed, ~29m09s left]  decmcts:horizon=4,rollout=greedy|n=4|sharing=BS|range=32|setting=IG_BS_Rinf run 19: avg MSE 0.0393, final 0.0000, stall   0        , 3.58 s/step
+[ 59/60  98%  1h05m elapsed, ~28m05s left]  mhmcts:horizon=4,rollout=greedy|n=4|sharing=BS|range=32|setting=IG_BS_Rinf run 18: avg MSE 0.0394, final 0.0000, stall   0        , 5.33 s/step
+[ 60/60 100%  1h05m elapsed, ~0m00s left]  mhmcts:horizon=4,rollout=greedy|n=4|sharing=BS|range=32|setting=IG_BS_Rinf run 19: avg MSE 0.0391, final 0.0000, stall   0        , 3.85 s/step
+swarm_rect IG_BS_Rinf, 4 UAVs: 20 runs x 100 steps (mean +- std over runs; vs the first planner: paired difference +- s.e.; nan = never reached)
+                             planner  steps to 80% cov   to 95%    backfill %   avg MSE         vs greedy (paired)  final MSE mean alt       stall  stalled incomplete      plan s/step
+                              greedy        16 +-   1     20     2.2 +- 1.9    0.0377 +0.0000 +- 0.0000 ( +0.0%)    0.00005    21.4m   0.0 +- 0.0     0/20       0/20    0.262 +- 0.092
+    decmcts:horizon=4,rollout=greedy        16 +-   0     19     2.3 +- 1.3    0.0373 -0.0003 +- 0.0003 ( -0.8%)    0.00002    20.1m   0.0 +- 0.0     0/20       0/20   12.635 +- 6.534
+     mhmcts:horizon=4,rollout=greedy        16 +-   0     20     3.9 +- 1.5    0.0390 +0.0013 +- 0.0003 ( +3.4%)    0.00003    20.3m   0.0 +- 0.0     0/20       0/20   15.819 +- 8.443
+
+                     avg MSE per run   median      std  90th pct    worst  stall >= trap  avg MSE of stalled runs
+                              greedy   0.0381   0.0017    0.0398   0.0402          0/20                      nan
+    decmcts:horizon=4,rollout=greedy   0.0374   0.0009    0.0381   0.0393          0/20                      nan
+     mhmcts:horizon=4,rollout=greedy   0.0389   0.0012    0.0407   0.0416          0/20                      nan
+
+                                team        overlap   connectivity   misalignment      balance
+                              greedy   0.272 +-0.083   1.000 +-0.000   0.000 +-0.000  0.08 +-0.06
+    decmcts:horizon=4,rollout=greedy   0.148 +-0.039   1.000 +-0.000   0.000 +-0.000  0.04 +-0.03
+     mhmcts:horizon=4,rollout=greedy   0.192 +-0.061   1.000 +-0.000   0.000 +-0.000  0.09 +-0.04
+
+-> results/compare/report_n4_Rinf_seed1042_stride1

@@ -1,0 +1,25 @@
+Persistence check: every variant vs every other on the same runs, avg MSE, paired % +- 95% CI (* Wilcoxon p<0.05)
+on seeds 42+i and 1042+i (20 runs each). persists = same sign on both and significant on both.
+
+## 4 UAVs R5
+  greedy             vs greedy:stride=8     seed42    -5.6±4.5*  seed1042    +1.1±4.5   FLIPS
+  greedy             vs D4                  seed42    -2.2±4.6   seed1042    +4.1±4.5   FLIPS
+  greedy             vs D4,stride=8         seed42    -1.1±5.0   seed1042    +6.1±4.8*  FLIPS
+  greedy             vs M4                  seed42    +4.9±4.1   seed1042    +8.2±4.4*  same sign
+  greedy:stride=8    vs D4                  seed42    +3.6±4.2   seed1042    +2.9±4.4   same sign
+  greedy:stride=8    vs D4,stride=8         seed42    +4.8±5.1   seed1042    +4.9±3.9*  same sign
+  greedy:stride=8    vs M4                  seed42   +11.1±3.2*  seed1042    +6.9±3.3*  persists
+  D4                 vs D4,stride=8         seed42    +1.1±5.3   seed1042    +2.0±3.6   same sign
+  D4                 vs M4                  seed42    +7.2±4.0*  seed1042    +3.9±3.3   same sign
+  D4,stride=8        vs M4                  seed42    +6.0±4.6*  seed1042    +1.9±2.6   same sign
+
+## 4 UAVs Rinf
+  greedy             vs D4                  seed42    +0.1±1.4   seed1042    +0.8±1.5   same sign
+  greedy             vs M4                  seed42    -5.0±1.8*  seed1042    -3.3±1.6*  persists
+  D4                 vs M4                  seed42    -5.1±1.4*  seed1042    -4.1±1.4*  persists
+
+## 1 UAV
+  greedy             vs D4                  seed42    +3.1±8.4   seed1042    +4.0±6.3   same sign
+  greedy             vs M4                  seed42    -2.9±6.9   seed1042    -1.7±6.2   same sign
+  D4                 vs M4                  seed42    -5.8±4.0*  seed1042    -5.5±2.9*  persists
+

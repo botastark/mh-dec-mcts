@@ -119,7 +119,8 @@ def one_run(cfg: dict, setting: dict, spec: str, run: int, steps: int, late: int
             "wall": wall, "coverage_paper": paper_coverage(lat, sc.grid.shape, res.poses, steps),
             "truth": sc.truth, "per_uav": {"mse": res.mse, "entropy": res.entropy, "alt": res.altitude},
             "beliefs": res.beliefs, "switch_step": getattr(pl, "switched_at", None),
-            **root_curves(getattr(getattr(pl, "first", pl), "root_log", None), steps)}
+            **root_curves(getattr(getattr(pl, "first", pl), "root_log", None), steps),
+            **({"g2_changed": list(pl.g2_changed)} if getattr(pl, "g2_changed", None) else {})}
 
 
 def root_curves(log: list | None, steps: int) -> dict:
@@ -147,7 +148,8 @@ def root_curves(log: list | None, steps: int) -> dict:
 SCHEMA = 1
 CURVES = ("mse", "entropy", "team_entropy", "alt", "coverage", "coverage_paper", "plan", "misalignment",
           "overlap", "connected", "backfill",  # per-step curves of a run, as one_run returns them
-          "root_agree", "root_up", "greedy_up", "root_down", "greedy_down", "root_gap")  # mcts.log_root only
+          "root_agree", "root_up", "greedy_up", "root_down", "greedy_down", "root_gap",  # mcts.log_root only
+          "g2_changed")  # mhgreedy: share of UAVs per step whose move g2 changed
 
 
 def condition_id(spec: str, n: int, sharing: str | None, range_: int | None, setting: str | None) -> str:

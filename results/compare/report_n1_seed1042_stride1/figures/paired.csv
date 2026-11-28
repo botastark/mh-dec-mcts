@@ -1,0 +1,19 @@
+setting,planner,ref,metric,split,d,ci,pct,pct_ci,lower,ties,runs,p
+"swarm_rect IGd_BM_R5, 1 UAV","decmcts:horizon=4,rollout=greedy",greedy,avg MSE,70,-0.004105321122057687,0.006498957386370118,-3.819323665677018,6.046207107800777,8,0,20,0.6215133666992188
+"swarm_rect IGd_BM_R5, 1 UAV","decmcts:horizon=4,rollout=greedy",greedy,MSE before split,70,-0.006576480908923754,0.005345214897405099,-4.526094123003354,3.678706905467835,9,0,20,0.3117942810058594
+"swarm_rect IGd_BM_R5, 1 UAV","decmcts:horizon=4,rollout=greedy",greedy,MSE after split,70,0.0016607183806298543,0.009953379311832348,8.623902088755303,51.686649367323646,6,0,20,0.40909767150878906
+"swarm_rect IGd_BM_R5, 1 UAV","decmcts:horizon=4,rollout=greedy",greedy,final MSE,70,0.007377572576681113,0.005997972462886679,80.76200658637606,65.65957657721519,4,0,20,0.0019855499267578125
+"swarm_rect IGd_BM_R5, 1 UAV","decmcts:horizon=4,rollout=greedy",greedy,steps to MSE 0.01,70,5.25,12.25,6.23827392120075,14.555972482801751,2,0,4,0.625
+"swarm_rect IGd_BM_R5, 1 UAV","decmcts:horizon=4,rollout=greedy",greedy,steps to MSE 0.002,70,nan,nan,nan,nan,0,0,0,1.0
+"swarm_rect IGd_BM_R5, 1 UAV","decmcts:horizon=4,rollout=greedy",greedy,steps to 95 % cov.,70,-0.1875,9.400202280624958,-0.26846269781461946,13.459219542718479,6,5,16,0.9644887449462776
+"swarm_rect IGd_BM_R5, 1 UAV","decmcts:horizon=4,rollout=greedy",greedy,mean altitude,70,0.027063293868263828,0.5099726797055432,0.12941633234114197,2.4386829675256116,10,0,20,0.9108017699093309
+"swarm_rect IGd_BM_R5, 1 UAV","decmcts:horizon=4,rollout=greedy",greedy,CPU s / step,70,1.1499734656879999,0.06889385141604722,1806.8235813510535,108.2451370076936,0,0,20,1.9073486328125e-06
+"swarm_rect IGd_BM_R5, 1 UAV","mhmcts:horizon=4,rollout=greedy",greedy,avg MSE,70,0.0018750782847693332,0.006821067605490412,1.7444508371191803,6.345877498073663,6,0,20,0.5458755493164062
+"swarm_rect IGd_BM_R5, 1 UAV","mhmcts:horizon=4,rollout=greedy",greedy,MSE before split,70,-0.0005583410933293426,0.005774996452133793,-0.38426392110712704,3.9744930251223853,8,0,20,0.956329345703125
+"swarm_rect IGd_BM_R5, 1 UAV","mhmcts:horizon=4,rollout=greedy",greedy,MSE after split,70,0.007553056833666258,0.010686447364214043,39.22207603894754,55.4933797448947,5,0,20,0.14290618896484375
+"swarm_rect IGd_BM_R5, 1 UAV","mhmcts:horizon=4,rollout=greedy",greedy,final MSE,70,0.008818316509316287,0.0054203694163581125,96.53377565640099,59.336577980699,2,0,20,0.000850677490234375
+"swarm_rect IGd_BM_R5, 1 UAV","mhmcts:horizon=4,rollout=greedy",greedy,steps to MSE 0.01,70,-20.0,nan,-23.764853033145716,nan,1,0,1,1.0
+"swarm_rect IGd_BM_R5, 1 UAV","mhmcts:horizon=4,rollout=greedy",greedy,steps to MSE 0.002,70,nan,nan,nan,nan,0,0,0,1.0
+"swarm_rect IGd_BM_R5, 1 UAV","mhmcts:horizon=4,rollout=greedy",greedy,steps to 95 % cov.,70,9.625,9.467488139240876,13.7810851544838,13.555559506072091,5,1,16,0.06908791715591991
+"swarm_rect IGd_BM_R5, 1 UAV","mhmcts:horizon=4,rollout=greedy",greedy,mean altitude,70,-0.09472152853892393,0.482664093185239,-0.4529571631939994,2.3080936487944235,12,0,20,0.4114239954629041
+"swarm_rect IGd_BM_R5, 1 UAV","mhmcts:horizon=4,rollout=greedy",greedy,CPU s / step,70,3.6897701080400003,0.33505650329928105,5797.319538135902,526.4364868488334,0,0,20,1.9073486328125e-06
