@@ -47,6 +47,8 @@ DEFAULTS = {
     "run": {"weights": "equal", "steps": 100, "runs": 20},
     "mcts": {},  # DecMCTSConfig overrides for planner "decmcts" (planning/dec_mcts.py)
     "mh": {},  # MHConfig overrides for planner "mhmcts" (planning/mh_mcts.py)
+    "greedy": {"stride": 1, "planner_seed": 0},  # ig / igd / mhgreedy: score looks on every stride-th
+    #                                             cell (1 = full grid); planner_seed k > 0: other tie-breaks
 }
 
 
@@ -205,11 +207,14 @@ def mapping_weights(cfg: dict) -> str:
 def make_starts(lat: Lattice, n: int, mode: str, rng: np.random.Generator) -> list[Pose]:
     """paper:  1 agent in the lower-left corner; N agents in the legacy corner order.
     legacy: start_poses() (1 agent: random corner from the run seed).
-    random: n distinct random waypoints. All at the lowest altitude."""
+    random: n distinct random waypoints.
+    depot:  every agent at the SW corner (common depot). All at the lowest altitude."""
     if mode == "paper":
         return [Pose(0, 0, 0)] if n == 1 else start_poses(lat, n)
     if mode == "legacy":
         return start_poses(lat, n, rng)
+    if mode == "depot":
+        return [Pose(0, 0, 0)] * n
     if mode == "random":
         flat = rng.choice(lat.nx * lat.ny, size=n, replace=False)
         return [Pose(int(f // lat.ny), int(f % lat.ny), 0) for f in flat]

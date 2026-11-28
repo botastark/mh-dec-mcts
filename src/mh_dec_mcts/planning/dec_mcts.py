@@ -63,6 +63,12 @@ class DecMCTSConfig:
     variant: str = "distribution"  # distribution: Best et al. 2019 (X_hat + q, Alg. 3, argmax q)
     #                                single: MH-MCTS paper's simplification, one intent = the tree's
     #                                exploitation path (c = 0), refreshed every round, no Alg. 3
+    reward: str = "entropy"  # entropy: drop in entropy | variance: drop in sum b(1-b) (objective.py)
+    planner_seed: int = 0  # 0: planning rng seeded [run_seed, 7] (as always); k > 0: [run_seed, 7, k],
+    #                        same field, starts and sensor noise, other planning randomness
+    log_root: bool = False  # keep root_log: per step and UAV, the root's action values (diagnosis)
+    switch_cov: float | None = None  # planners.PhaseSwitch: the team flies the setting's greedy once
+    #                                  the UAVs' mean coverage reaches this (None: never)
 
 
 class Node:
@@ -168,6 +174,7 @@ class DecMCTS:
         self.last_q: list[tuple[list[Seq], np.ndarray]] = []  # per agent, for inspection
         self.last_trees: list[Tree] = []
         self.last_strides: list[int] = []  # per agent, the stride of the last plan()
+        self.root_log: list[list[dict]] = []  # with cfg.log_root: per plan() call, per agent (log_root)
 
     # ---------- single agent ----------
     def choose(self, belief, pose, visited=None, rng=None) -> str:
@@ -181,7 +188,7 @@ class DecMCTS:
             raise ValueError(f"unknown Dec-MCTS variant '{cfg.variant}'")
         if not cfg.share_plans:
             nbrs = [[] for _ in range(n)]
-        grids = [PlanGrid(b, self.lat, self.rates, self.stride_for(b)) for b in beliefs]
+        grids = [PlanGrid(b, self.lat, self.rates, self.stride_for(b), cfg.reward) for b in beliefs]
         self.last_strides = [g.s for g in grids]
         self._start_plan(grids)
         trees = [self._new_tree(p) for p in poses]
@@ -212,7 +219,22 @@ class DecMCTS:
                         self._delivered(r, j)
             beta = cfg.beta0 if (it + 1) % cfg.resample_every == 0 else beta * cfg.cool
         self.last_q, self.last_trees = list(zip(own, q)), trees
-        return [self._first_action(poses[r], own[r][int(np.argmax(q[r]))]) for r in range(n)]
+        actions = [self._first_action(poses[r], own[r][int(np.argmax(q[r]))]) for r in range(n)]
+        if cfg.log_root:
+            self.root_log.append([self.log_root(trees[r], grids[r], actions[r]) for r in range(n)])
+        return actions
+
+    def log_root(self, tree: Tree, grid: PlanGrid, action: str) -> dict:
+        """What the tree thought of its first move: per root action its discounted visits and mean
+        reward (on the UCB scale, Tree.score), the action taken, and the action greedy would take
+        on the same planning grid (best expected one-look reward on the UAV's own belief)."""
+        pose = tree.root.pose
+        kids = {a: c for a, c in tree.root.children.items()}
+        st = State(grid.base, None)
+        ig = {a: grid.gain(st, self.lat.step(pose, a)) for a in self.lat.admissible(pose)}
+        return {"action": action, "greedy": max(ig, key=ig.get), "alt": pose.k,
+                "value": {a: tree.score(c.mean) for a, c in kids.items()},
+                "visits": {a: c.n for a, c in kids.items()}, "ig": ig}
 
     def stride_for(self, belief: np.ndarray) -> int:
         """The planning stride for one UAV this step: `stride`, or with stride_fine set, stride_fine

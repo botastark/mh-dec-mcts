@@ -6,12 +6,18 @@ Team interface (what run_single and run_multi call; one agent = a team of one):
         beliefs, poses: per agent; nbrs[r]: who hears agent r at the current poses.
 
 Planners (make_planner names):
-    ig       greedy IG (paper Eq. 8-9), every agent on its own belief
+    ig       greedy IG (paper Eq. 8-9), every agent on its own belief; config `greedy: {stride}`
+             scores looks on a strided grid as Dec-MCTS does (1 = full grid, the paper's)
     igd      IG discounted by footprint overlap with the neighbours (paper Sec. III-E)
     random   uniformly random admissible action (paper baseline)
     sweep    climb to the optimal altitude, then lawnmower (paper baseline)
     decmcts  Dec-MCTS (planning/dec_mcts.py), config section `mcts`
     mhmcts   MH-MCTS (planning/mh_mcts.py), low level from `mcts`, the rest from `mh`
+    mhgreedy MH with a greedy low level (mh_mcts.MHGreedy): IG / IGd as the setting's greedy plus
+             g2; `mh` section, stride from `greedy`
+Options of every planner: greedy.planner_seed / mcts.planner_seed (k > 0: other planning
+randomness on the same runs); mcts.switch_cov (decmcts, mhmcts): PhaseSwitch to the setting's
+greedy once the team's mean coverage reaches it.
 
 ig / random / sweep are single-agent policies, choose(belief, pose, visited, rng) -> action
 (`visited`: poses flown so far, oldest first, used only by Sweep), run per agent by Independent.
@@ -22,7 +28,7 @@ import numpy as np
 from mh_dec_mcts.comms.network import neighbours
 from mh_dec_mcts.planning.dec_mcts import DecMCTS, DecMCTSConfig
 from mh_dec_mcts.planning.information import info_gain
-from mh_dec_mcts.planning.mh_mcts import make_mh_mcts
+from mh_dec_mcts.planning.mh_mcts import MHConfig, MHGreedy, make_mh_mcts, planning_seed
 from mh_dec_mcts.sensing.lattice import ACTIONS, Lattice, Pose
 from mh_dec_mcts.sensing.sensor import SensorRates
 
@@ -37,18 +43,32 @@ def pick_best(scores: dict[str, float], rng: np.random.Generator, eps: float = 1
 
 
 class GreedyIG:
-    """IG_a = sum of per-cell IG over the footprint after action a (paper Eq. 8-9)."""
+    """IG_a = sum of per-cell IG over the footprint after action a (paper Eq. 8-9).
 
-    def __init__(self, lat: Lattice, rates: SensorRates, tie_eps: float = 1e-4):
-        self.lat, self.rates, self.tie_eps = lat, rates, tie_eps
+    stride > 1 ("sgreedy"): the sum runs over every stride-th cell of the global grid (the cells
+    Dec-MCTS's objective.PlanGrid sees, same ceil bounds) and is scaled by stride**2."""
+
+    def __init__(self, lat: Lattice, rates: SensorRates, tie_eps: float = 1e-4, stride: int = 1):
+        self.lat, self.rates, self.tie_eps, self.stride = lat, rates, tie_eps, stride
         self.last_scores: dict[str, float] = {}
 
     def scores(self, belief: np.ndarray, pose: Pose) -> dict[str, float]:
+        s = self.stride
+        if s > 1:
+            return self._strided_scores(belief[::s, ::s], pose, s)
         out = {}
         for a in self.lat.admissible(pose):
             q = self.lat.step(pose, a)
             i0, i1, j0, j1 = self.lat.footprint(q)
             out[a] = float(np.sum(info_gain(belief[i0:i1, j0:j1], *self.rates.at(q.k))))
+        return out
+
+    def _strided_scores(self, sub: np.ndarray, pose: Pose, s: int) -> dict[str, float]:
+        out = {}
+        for a in self.lat.admissible(pose):
+            q = self.lat.step(pose, a)
+            i0, i1, j0, j1 = (-(-v // s) for v in self.lat.footprint(q))  # ceil: the global sub-grid
+            out[a] = float(np.sum(info_gain(sub[i0:i1, j0:j1], *self.rates.at(q.k)))) * s * s
         return out
 
     def choose(self, belief, pose, visited, rng) -> str:
@@ -170,8 +190,8 @@ class IGd:
     their new pose). Neighbours within `range_` waypoint steps (None = everyone). One agent: IG."""
 
     def __init__(self, lat: Lattice, rates: SensorRates, rngs: list[np.random.Generator],
-                 order_rng: np.random.Generator, range_: int | None, tie_eps: float = 1e-4):
-        self.lat, self.g = lat, GreedyIG(lat, rates, tie_eps)
+                 order_rng: np.random.Generator, range_: int | None, tie_eps: float = 1e-4, stride: int = 1):
+        self.lat, self.g = lat, GreedyIG(lat, rates, tie_eps, stride)
         self.rngs, self.order_rng, self.range, self.tie_eps = rngs, order_rng, range_, tie_eps
 
     def plan(self, beliefs, poses, nbrs) -> list[str]:
@@ -192,13 +212,30 @@ class IGd:
         return actions
 
 
-PLANNERS = ("ig", "igd", "random", "sweep", "decmcts", "mhmcts")
+class PhaseSwitch:
+    """A tree planner until the team's mean coverage (share of cells each UAV's belief has seen,
+    b != 0.5, averaged over the UAVs) reaches `cov`, then the greedy planner for the rest of the
+    mission. switched_at: the first step planned by greedy (None: never)."""
+
+    def __init__(self, first, then, cov: float):
+        self.first, self.then, self.cov = first, then, cov
+        self.t, self.switched_at = 0, None
+
+    def plan(self, beliefs, poses, nbrs) -> list[str]:
+        if self.switched_at is None and np.mean([np.mean(b != 0.5) for b in beliefs]) >= self.cov:
+            self.switched_at = self.t
+        self.t += 1
+        return (self.first if self.switched_at is None else self.then).plan(beliefs, poses, nbrs)
 
 
-def make_planner(name: str, cfg: dict, sc, range_: int | None = None):
+PLANNERS = ("ig", "igd", "random", "sweep", "decmcts", "mhmcts", "mhgreedy")
+
+
+def make_planner(name: str, cfg: dict, sc, range_: int | None = None, base: str | None = None):
     """Any planner for scenario sc (fresh state: build one per run). Randomness comes from the
     scenario's per-agent plan_rngs and order_rng (Dec-MCTS: its own, seeded from the run).
-    range_: IGd's neighbour range, default comms.range. compat "pierdicca": exact-tie greedy IG
+    range_: IGd's neighbour range, default comms.range. base: the setting's greedy (ig | igd),
+    for mhgreedy and the phase switch (default ig). compat "pierdicca": exact-tie greedy IG
     and his sweep pattern."""
     from mh_dec_mcts.scenario import with_defaults
 
@@ -206,18 +243,32 @@ def make_planner(name: str, cfg: dict, sc, range_: int | None = None):
     pierdicca = cfg["compat"] == "pierdicca"
     tie_eps = 0.0 if pierdicca else 1e-4
     lat, rates, n = sc.lattice, sc.rates, len(sc.starts)
+    stride = int(cfg["greedy"]["stride"])
+    rng_range = range_ if range_ is not None else cfg["comms"]["range"]
+    plan_rngs, order_rng = sc.plan_rngs, sc.order_rng
+    if (k := int(cfg["greedy"].get("planner_seed", 0))) and name in ("ig", "igd", "mhgreedy"):
+        plan_rngs = [np.random.default_rng([sc.run_seed, 5, k, i]) for i in range(n)]  # other tie-breaks
+        order_rng = np.random.default_rng([sc.run_seed, 6, k])  # and IGd decision orders
+    switch = cfg["mcts"].get("switch_cov")
+    if switch is not None and name in ("decmcts", "mhmcts"):
+        first = make_planner(name, {**cfg, "mcts": {**cfg["mcts"], "switch_cov": None}}, sc, range_, base)
+        return PhaseSwitch(first, make_planner(base or "ig", cfg, sc, range_), float(switch))
     if name == "ig":
-        g = GreedyIG(lat, rates, tie_eps)  # stateless: one for the whole team
-        return Independent([g] * n, sc.plan_rngs)
+        g = GreedyIG(lat, rates, tie_eps, stride)  # stateless: one for the whole team
+        return Independent([g] * n, plan_rngs)
     if name == "igd":
-        return IGd(lat, rates, sc.plan_rngs, sc.order_rng,
-                   range_ if range_ is not None else cfg["comms"]["range"], tie_eps)
+        return IGd(lat, rates, plan_rngs, order_rng, rng_range, tie_eps, stride)
+    if name == "mhgreedy":
+        return MHGreedy(lat, rates, MHConfig(**cfg["mh"]), plan_rngs, order_rng, rng_range,
+                        (base or "ig") == "igd", int(cfg["run"]["steps"]), stride, tie_eps,
+                        planning_seed(sc.run_seed, int(cfg["greedy"].get("planner_seed", 0))))
     if name == "random":
         return Independent([RandomPlanner(lat)] * n, sc.plan_rngs)
     if name == "sweep":
         return Independent([PierdiccaSweep(lat) if pierdicca else Sweep(lat) for _ in range(n)], sc.plan_rngs)
     if name == "decmcts":
-        return DecMCTS(lat, rates, DecMCTSConfig(**cfg["mcts"]), [sc.run_seed, 7])
+        c = DecMCTSConfig(**cfg["mcts"])
+        return DecMCTS(lat, rates, c, planning_seed(sc.run_seed, c.planner_seed))
     if name == "mhmcts":
         return make_mh_mcts(cfg, sc)
     raise ValueError(f"unknown planner '{name}' (known: {', '.join(PLANNERS)})")

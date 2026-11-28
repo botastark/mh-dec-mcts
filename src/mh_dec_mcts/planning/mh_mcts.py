@@ -28,6 +28,11 @@ Step 5: the high-level planner (HLP, paper Sec. V-VI). Every UAV also grows a Re
         are dropped from the search; it is rebuilt when a region reopens or fewer than
         `hl_rebuild` of its regions are left. hl_rollouts = 0: no HLP, every UAV goes
         nearest-first (step 3).
+Step 6 (exploratory): MHGreedy, the same g2 with a greedy low level instead of the tree: every
+        UAV scores each move a by  IG(a) + w lam (T[stay] - T[a])  (IGd's overlap discount on IG
+        in IGd settings) and the HLP orders the regions as above. budget: T is the work left
+        undone when the mission's steps run out (MissionTime with `budget`) instead of the mean
+        finishing time, so the regions only pull while the steps left are too few for them.
 """
 
 from collections.abc import Sequence
@@ -58,6 +63,8 @@ class MHConfig:
     hl_cp: float = 0.5  # exploration constant of the HL tree
     hl_rollout: str = "nearest"  # HL default policy: nearest (open region nearest to the last) | random
     hl_rebuild: float = 0.5  # rebuild the HL tree once fewer than this share of its regions are open
+    budget: bool = False  # mhgreedy only: g2 = work left undone at the mission's end (steps left), not
+    #                       the mean finishing time
 
 
 class Regions:
@@ -161,10 +168,14 @@ class MissionTime:
         return np.maximum(0.0, E - self.done * self.reg.cells * self.reg.scale) / self.lam
 
     def __call__(self, E: np.ndarray, open_: frozenset[int], robots: list[Robot],
-                 orders: list[Order | None] | None = None) -> float:
+                 orders: list[Order | None] | None = None, budget: float | None = None) -> float:
         """robots: [(t0, (ix, iy))], each UAV's time and waypoint at the end of its plan;
-        orders: per UAV, its order of regions (high-level plan) or None for nearest-first."""
+        orders: per UAV, its order of regions (high-level plan) or None for nearest-first.
+        budget: steps left in the mission; then the result is the work (steps) of the open regions
+        not done by then, same assignment (work on a region stops at the budget)."""
         orders = orders or [None] * len(robots)
+        if budget is not None:
+            return self.left_undone(E, open_, robots, orders, budget)
         if not open_:
             return float(np.mean([t0 for t0, _ in robots]))
         w = self.works(E)
@@ -183,6 +194,28 @@ class MissionTime:
             d[i] = self.reg.from_center[r]
             is_open[r] = False
         return float(np.mean(t))
+
+    def left_undone(self, E: np.ndarray, open_: frozenset[int], robots: list[Robot],
+                    orders: list[Order | None], budget: float) -> float:
+        """Work (steps) of the open regions not finished within `budget` steps: the assignment of
+        __call__, each region's work cut where the budget ends."""
+        if not open_:
+            return 0.0
+        w = self.works(E)
+        is_open = np.zeros(self.reg.n, bool)
+        is_open[list(open_)] = True
+        t = [float(t0) for t0, _ in robots]
+        d = [self.reg.dist_all(xy) for _, xy in robots]
+        pointer, left = [0] * len(robots), 0.0
+        for _ in range(len(open_)):
+            i = int(np.argmin(t))
+            r = self._next(i, orders[i], pointer, is_open, d[i])
+            start = t[i] + d[i][r]
+            left += w[r] - min(w[r], max(0.0, budget - start))
+            t[i] = start + w[r]
+            d[i] = self.reg.from_center[r]
+            is_open[r] = False
+        return left
 
     def _next(self, i: int, order, pointer: list[int], is_open: np.ndarray, d: np.ndarray) -> int:
         """UAV i's next region: the first still-open one of its order, else the nearest open."""
@@ -316,6 +349,10 @@ class MHMCTS(DecMCTS):
         cfg.variant = "single"
         super().__init__(lat, rates, cfg, seed)
         self.mh = mh or MHConfig()
+        if self.mh.budget:
+            raise ValueError("MHConfig.budget is for mhgreedy only")
+        if cfg.reward != "entropy" and self.mh.g2_weight:
+            raise ValueError("g2 counts entropy (bits): reward 'variance' needs g2_weight 0")
         self._times: dict[int, MissionTime] = {}  # per planning stride (coverage-adaptive stride)
         self.T = self.time_at(cfg.stride)  # at the base stride (inspection, tests)
         self.reg = self.T.reg
@@ -410,11 +447,125 @@ class MHMCTS(DecMCTS):
         self._hl_known[receiver][sender] = self.last_hl[sender]  # the order travels with the plan
 
 
+class MHGreedy:
+    """MH with a greedy low level (step 6 of the module docstring). Team interface as IGd:
+    plan(beliefs, poses, nbrs) -> actions. With g2_weight 0 it is greedy exactly: IG (one UAV, or
+    overlap=False) or IGd (overlap=True), the same generators and decision order.
+
+    Per step: an IG pass as IGd (tie-breaks from rngs), then the UAVs decide in a random order
+    (order_rng). UAV r scores move a to pose q by
+        IG(q) [x (1 - IoU) with each neighbour's predicted footprint, overlap only]
+        + w lam (T[stay] - T[q])
+    T on its own belief (planning sub-grid of `stride`): its open regions, entropies after the
+    look (expected per cell, the IG) for T[q], its order (HL tree as in MHMCTS, against the
+    neighbours at their current or already-decided poses), neighbours = the UAVs within range,
+    t0 = 1 once decided. budget: T = MissionTime.left_undone with the steps left (steps - steps
+    already planned)."""
+
+    def __init__(self, lat: Lattice, rates: SensorRates, mh: MHConfig, rngs, order_rng, range_,
+                 overlap: bool, steps: int, stride: int = 1, tie_eps: float = 1e-4, seed=0):
+        from mh_dec_mcts.planning.planners import GreedyIG
+
+        self.lat, self.rates, self.mh, self.stride = lat, rates, mh, stride
+        self.g = GreedyIG(lat, rates, tie_eps, stride)
+        self.rngs, self.order_rng, self.range, self.overlap = rngs, order_rng, range_, overlap
+        self.tie_eps, self.steps, self.t = tie_eps, steps, 0
+        self.rng = np.random.default_rng(seed)  # HL tree only
+        lam = look_rate(lat, rates, stride) if mh.rate == "auto" else float(mh.rate)
+        self.T = MissionTime(Regions(lat, stride, mh.tile), lam, mh.done_entropy)
+        self.hl_trees: dict[int, RegionTree] = {}
+        self.last_hl: list[Order | None] = []
+
+    def plan(self, beliefs, poses, nbrs) -> list[str]:
+        from mh_dec_mcts.comms.network import neighbours
+        from mh_dec_mcts.planning.planners import iou, pick_best
+
+        lat, n, w = self.lat, len(poses), self.mh.g2_weight
+        budget = float(self.steps - self.t) if self.mh.budget else None
+        self.t += 1
+        scores = [self.g.scores(beliefs[a], poses[a]) for a in range(n)]
+        actions = [pick_best(scores[a], self.rngs[a], self.tie_eps) for a in range(n)]  # IG pass
+        if not w and not (self.overlap and n > 1):
+            return actions  # IG
+        predicted, decided = list(poses), [False] * n
+        actions = ["hover"] * n
+        self.last_hl = [None] * n
+        for a in (self.order_rng.permutation(n) if n > 1 else [0]):
+            mates = neighbours(predicted, self.range)[a] if n > 1 else []
+            if self.overlap and n > 1:
+                for nb in mates:
+                    nb_fp = lat.footprint(predicted[nb])
+                    for act in scores[a]:
+                        scores[a][act] *= 1.0 - iou(nb_fp, lat.footprint(lat.step(poses[a], act)))
+            if w:
+                others = [(int(decided[j]), (predicted[j].ix, predicted[j].iy)) for j in mates]
+                g2 = self._g2(a, beliefs[a], poses[a], others, budget)
+                scores[a] = {act: v + w * self.T.lam * g2[act] for act, v in scores[a].items()}
+            actions[a] = pick_best(scores[a], self.rngs[a], self.tie_eps)
+            predicted[a], decided[a] = lat.step(poses[a], actions[a]), True
+        return actions
+
+    def _g2(self, r: int, belief, pose: Pose, others: list[Robot], budget) -> dict[str, float]:
+        """T[stay] - T[move] per admissible move of UAV r (steps)."""
+        s, T, lat = self.stride, self.T, self.lat
+        base = np.ascontiguousarray(belief[::s, ::s], dtype=float)
+        open_ = T.open(base)
+        if not open_:
+            return {a: 0.0 for a in lat.admissible(pose)}
+        E = T.reg.entropy(base)
+        mine = self._order(r, open_, E, pose, others, budget)
+        orders = [mine] + [None] * len(others)
+        t_stay = T(E, open_, [(0, (pose.ix, pose.iy))] + others, orders, budget)
+        label = T.reg.label.reshape(base.shape)
+        out = {}
+        for a in lat.admissible(pose):
+            q = lat.step(pose, a)
+            i0, i1, j0, j1 = (-(-v // s) for v in lat.footprint(q))
+            s0, s1 = self.rates.at(q.k)
+            cells = base[i0:i1, j0:j1]
+            pz1 = s0 + (1.0 - s0 - s1) * cells
+            ig = binary_entropy(pz1) - (1 - cells) * binary_entropy(s0) - cells * binary_entropy(s1)
+            drop = np.bincount(label[i0:i1, j0:j1].ravel(), weights=ig.ravel(), minlength=T.reg.n) * s * s
+            out[a] = t_stay - T(E - drop, open_, [(1, (q.ix, q.iy))] + others, orders, budget)
+        return out
+
+    def _order(self, r: int, open_, E, pose: Pose, others: list[Robot], budget) -> Order | None:
+        """UAV r's region order: its HL tree (kept while regions only close), grown by hl_rollouts
+        rollouts against the neighbours (nearest-first); None without HLP."""
+        mh = self.mh
+        if not mh.hl_rollouts:
+            return None
+        tree = self.hl_trees.get(r)
+        if tree is None or not open_ <= tree.key or len(open_) < mh.hl_rebuild * len(tree.key):
+            tree = self.hl_trees[r] = RegionTree(open_, mh.hl_gamma, mh.hl_cp)
+        else:
+            tree.close(open_)
+        me = (0, (pose.ix, pose.iy))
+        nones = [None] * len(others)
+        t_null = self.T(E, open_, [me] + others, [None] + nones, budget)
+        reg = self.T.reg if mh.hl_rollout == "nearest" else None
+        for _ in range(mh.hl_rollouts):
+            node = tree.select_expand(self.rng)
+            order = tree.complete(node, self.rng, reg, me[1])
+            if not node.seq:
+                node.seq = order
+            tree.backprop(node, mh.g2_weight * self.T.lam * (t_null - self.T(E, open_, [me] + others,
+                                                                               [order] + nones, budget)))
+        self.last_hl[r] = tree.exploit_sequence() or None
+        return self.last_hl[r]
+
+
 def make_mh_mcts(cfg: dict, sc) -> MHMCTS:
     """MH-MCTS for a scenario: low-level settings from `mcts`, the rest from `mh`; planning rng
-    seeded from the run, as Dec-MCTS in planners.make_planner."""
-    return MHMCTS(sc.lattice, sc.rates, DecMCTSConfig(**cfg.get("mcts", {})),
-                  MHConfig(**cfg.get("mh", {})), [sc.run_seed, 7])
+    seeded from the run (and mcts.planner_seed), as Dec-MCTS in planners.make_planner."""
+    c = DecMCTSConfig(**cfg.get("mcts", {}))
+    return MHMCTS(sc.lattice, sc.rates, c, MHConfig(**cfg.get("mh", {})), planning_seed(sc.run_seed, c.planner_seed))
+
+
+def planning_seed(run_seed: int, planner_seed: int) -> list[int]:
+    """Seed of a tree planner's own generator: [run_seed, 7] (planner_seed 0, as always), else
+    [run_seed, 7, planner_seed]."""
+    return [run_seed, 7] if not planner_seed else [run_seed, 7, planner_seed]
 
 
 def split_overrides(over: dict) -> tuple[dict, dict]:

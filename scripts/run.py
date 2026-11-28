@@ -26,6 +26,10 @@ Output in <out>/<tag>/ (tag default: config name [_r<r>] _<weights> [_<setting>]
     results.txt    the tables printed at the end: mean +- std over runs; the difference to the
                    first planner per run (paired) +- s.e.
 Figures, any time later and without rerunning: scripts/plot.py (figures go to <tag>/figures/).
+
+Resume: every finished run is saved at once to <out>/<tag>/_partial/ (not compat: pierdicca). The
+same command again (after a crash or reboot) skips the runs saved there, keyed by condition,
+seed + i, steps and the stall settings; the folder is removed once the results are written.
 """
 
 import os
@@ -34,7 +38,11 @@ for _v in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS"):
     os.environ.setdefault(_v, "1")  # one maths thread per process, before numpy is imported
 
 import argparse
+import gzip
+import hashlib
 import itertools
+import pickle
+import shutil
 import sys
 import time
 import warnings
@@ -72,6 +80,27 @@ def condition_cfg(config: str, over: dict, c: dict) -> dict:
     agents = {**over.get("agents", {}), "n": c["n"]}
     return load_config(config, **{**over, "agents": agents,
                                   "comms": {"range": c["range"], "sharing": c["sharing"]}})
+
+
+# ------------------------------------------------------------------ resume
+def partial_path(out: Path, cid: str, seed: int, rest: tuple) -> Path:
+    """Where the finished run of condition cid with scenario seed `seed` is kept until the end."""
+    key = hashlib.sha1(f"{cid}|{seed}|{rest}".encode()).hexdigest()[:20]
+    return out / "_partial" / f"{key}.pkl.gz"
+
+
+def save_partial(path: Path, r: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(".tmp")
+    tmp.write_bytes(gzip.compress(pickle.dumps(r, protocol=pickle.HIGHEST_PROTOCOL), compresslevel=3))
+    tmp.replace(path)  # atomic: a crash mid-write leaves no half file
+
+
+def load_partial(path: Path) -> dict | None:
+    try:
+        return pickle.loads(gzip.decompress(path.read_bytes()))
+    except (OSError, EOFError, pickle.UnpicklingError):
+        return None
 
 
 # ------------------------------------------------------------------ jobs (top level: picklable)
@@ -256,11 +285,19 @@ def main(argv: list[str] | None = None) -> Path:
                     print(progress(done, (c["id"], i), todo, args.jobs, time.time() - t0, args.trap), flush=True)
         else:
             index = {c["id"]: k for k, c in enumerate(conds)}
+            keep = (steps, args.late, args.stall_rate)
+            paths = {(cid, i): partial_path(out, cid, int(ccfgs[index[cid]]["seed"]) + i, keep) for cid, i in todo}
+            for key, path in paths.items():
+                if path.exists() and (r := load_partial(path)) is not None:
+                    done[key] = r
+            if done:
+                print(f"resumed {len(done)} of {len(todo)} runs from {out / '_partial'}", flush=True)
             futs = {ex.submit(job_run, ccfgs[index[cid]], settings[index[cid]], conds[index[cid]]["planner"],
-                              i, *rest): (cid, i) for cid, i in todo}
+                              i, *rest): (cid, i) for cid, i in todo if (cid, i) not in done}
             for fut in as_completed(futs):
                 key = futs[fut]
                 done[key] = fut.result()
+                save_partial(paths[key], done[key])
                 print(progress(done, key, todo, args.jobs, time.time() - t0, args.trap), flush=True)
 
     arrays = {}
@@ -279,6 +316,7 @@ def main(argv: list[str] | None = None) -> Path:
     lines = tables(conds, runs, steps, args.trap, cfg["name"])
     print("\n".join(lines))
     (out / "results.txt").write_text("\n".join(lines) + "\n")
+    shutil.rmtree(out / "_partial", ignore_errors=True)
     print(f"-> {out}")
     return out
 

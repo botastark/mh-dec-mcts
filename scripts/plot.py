@@ -108,17 +108,22 @@ def cmd_uavs(args):
 
 def cmd_paired(args):
     out = outdir(args, args.results[0])
-    blocks = [b for p in args.results for b in paired.compare(load_results(p), args.split)]
-    rs = paired.rows(blocks)
-    txt = paired.table(rs)
-    print(txt)
-    (out / "paired.txt").write_text(txt + "\n")
-    with open(out / "paired.csv", "w", newline="") as f:
-        w = csv.DictWriter(f, fieldnames=list(rs[0]))
-        w.writeheader()
-        w.writerows(rs)
-    paired.curves(blocks, out / "paired_curves.png", args.keys)
-    paired.forest(rs, out / "paired_summary.png")
+    blocks = [b for p in args.results for b in paired.compare(load_results(p), args.split, args.ref)]
+    if not blocks:
+        raise SystemExit("nothing to compare")
+    sfx = "" if not args.ref else "_vs_" + args.ref.replace(":", "_").replace(",", "_").replace("=", "")
+    rs, prim = paired.rows(blocks), paired.primary(blocks)
+    txt, ptxt = paired.table(rs), paired.primary_table(prim)
+    print(ptxt + "\n\n" + txt)
+    (out / f"paired{sfx}.txt").write_text(txt + "\n")
+    (out / f"primary{sfx}.txt").write_text(ptxt + "\n")
+    for name, table in ((f"paired{sfx}.csv", rs), (f"primary{sfx}.csv", prim)):
+        with open(out / name, "w", newline="") as f:
+            w = csv.DictWriter(f, fieldnames=list(table[0]))
+            w.writeheader()
+            w.writerows(table)
+    paired.curves(blocks, out / f"paired_curves{sfx}.png", args.keys)
+    paired.forest(rs, out / f"paired_summary{sfx}.png")
     return out
 
 
@@ -182,6 +187,7 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument("results", nargs="+", type=Path, help="run.py output folders")
     p.add_argument("--keys", nargs="+", default=list(paired.CURVE_KEYS), help="curves to difference per step")
     p.add_argument("--split", type=int, help="step splitting before / after (default: reference's mean t95)")
+    p.add_argument("--ref", metavar="SPEC", help="reference planner (default: the first of each setting)")
     add("fig3", cmd_fig3, "Pierdicca Fig. 3", filters=False).add_argument("--traj", nargs=2, metavar="PLANNER")
     p = add("fig4", cmd_fig4, "Pierdicca Fig. 4", result=False, filters=False)
     p.add_argument("paths", nargs="+", type=Path, help="results per weights and r, or folders holding them")

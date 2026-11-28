@@ -2,7 +2,9 @@
 
 A planner spec is a planner name with optional overrides: "greedy" (the setting's IG / IGd),
 "ig", "igd", "random", "sweep", or "decmcts" / "mhmcts" followed by ":key=value,...". Keys of
-MHConfig (tile, g2_weight, ...) go to the config section `mh`, the others to `mcts`.
+MHConfig (tile, g2_weight, ...) go to the config section `mh`, the others to `mcts`; overrides of
+greedy / ig / igd (stride, planner_seed) go to `greedy`, e.g. "greedy:stride=4" (sgreedy); of
+mhgreedy, MHConfig keys to `mh` and the rest (stride, planner_seed) to `greedy`.
 """
 
 import json
@@ -63,11 +65,18 @@ def one_run(cfg: dict, setting: dict, spec: str, run: int, steps: int, late: int
     scalars, the poses, the first-seen map, the ground truth and the final beliefs. streams: the experiment's generators for compat pierdicca (make_streams), the
     runs of one experiment built in order 0, 1, 2, ... with the same object."""
     name, over = parse(spec)
-    mcts_over, mh_over = split_overrides(over)  # e.g. mhmcts:horizon=4,tile=12.5
-    cfg = {**cfg, "mcts": {**cfg["mcts"], **mcts_over}, "mh": {**cfg.get("mh", {}), **mh_over}}
+    cfg = {**cfg, "run": {**cfg.get("run", {}), "steps": steps}}  # the mission length (mhgreedy budget)
+    if name in ("greedy", "ig", "igd"):  # e.g. greedy:stride=4
+        cfg = {**cfg, "greedy": {**cfg.get("greedy", {}), **over}}
+    elif name == "mhgreedy":  # e.g. mhgreedy:g2_weight=1,budget=true,stride=2
+        rest, mh_over = split_overrides(over)
+        cfg = {**cfg, "greedy": {**cfg.get("greedy", {}), **rest}, "mh": {**cfg.get("mh", {}), **mh_over}}
+    else:
+        mcts_over, mh_over = split_overrides(over)  # e.g. mhmcts:horizon=4,tile=12.5
+        cfg = {**cfg, "mcts": {**cfg["mcts"], **mcts_over}, "mh": {**cfg.get("mh", {}), **mh_over}}
     sc = make_scenario(cfg, run, streams)
     planner = setting["greedy"] if name == "greedy" else name
-    pl = make_planner(planner, cfg, sc, setting["range"])
+    pl = make_planner(planner, cfg, sc, setting["range"], setting.get("greedy"))
     t0, w0 = time.process_time(), time.perf_counter()
     res = run_multi(sc, pl, steps, mapping_weights(cfg), setting["sharing"], setting["range"])
     cpu = (time.process_time() - t0) / steps  # CPU seconds per step (whole team)
@@ -109,13 +118,36 @@ def one_run(cfg: dict, setting: dict, spec: str, run: int, steps: int, late: int
             "stall": longest_stall(team_h, stall_rate), "first": first, "poses": res.poses, "cpu": cpu,
             "wall": wall, "coverage_paper": paper_coverage(lat, sc.grid.shape, res.poses, steps),
             "truth": sc.truth, "per_uav": {"mse": res.mse, "entropy": res.entropy, "alt": res.altitude},
-            "beliefs": res.beliefs}
+            "beliefs": res.beliefs, "switch_step": getattr(pl, "switched_at", None),
+            **root_curves(getattr(getattr(pl, "first", pl), "root_log", None), steps)}
+
+
+def root_curves(log: list | None, steps: int) -> dict:
+    """Per step, averaged over the UAVs, from a tree planner's root_log (mcts.log_root): agreement
+    with greedy's action; share of moves up / down taken by the tree and by greedy; the tree's
+    value gap between its action and greedy's (UCB scale, 0 when they agree). Steps after a
+    phase switch (no tree) are NaN."""
+    if not log:
+        return {}
+
+    def per_step(f):
+        return [float(np.mean([f(u) for u in log[t]])) if t < len(log) else float("nan") for t in range(steps)]
+
+    def gap(u):
+        v = u["value"]
+        return v.get(u["action"], 0.0) - v.get(u["greedy"], 0.0)
+
+    return {"root_agree": per_step(lambda u: u["action"] == u["greedy"]),
+            "root_up": per_step(lambda u: u["action"] == "up"), "greedy_up": per_step(lambda u: u["greedy"] == "up"),
+            "root_down": per_step(lambda u: u["action"] == "down"),
+            "greedy_down": per_step(lambda u: u["greedy"] == "down"), "root_gap": per_step(gap)}
 
 
 # ------------------------------------------------------------------ result format (docs/results_format.md)
 SCHEMA = 1
 CURVES = ("mse", "entropy", "team_entropy", "alt", "coverage", "coverage_paper", "plan", "misalignment",
-          "overlap", "connected", "backfill")  # per-step curves of a run, as one_run returns them
+          "overlap", "connected", "backfill",  # per-step curves of a run, as one_run returns them
+          "root_agree", "root_up", "greedy_up", "root_down", "greedy_down", "root_gap")  # mcts.log_root only
 
 
 def condition_id(spec: str, n: int, sharing: str | None, range_: int | None, setting: str | None) -> str:
@@ -133,7 +165,8 @@ def run_record(r: dict, run: int, run_seed: int) -> dict:
                         "t80": next((t for t, c in enumerate(cov) if c >= 0.8), None),
                         "t95": next((t for t, c in enumerate(cov) if c >= 0.95), None),
                         "altitude": r["altitude"], "balance": r["balance"], "cpu_per_step": r["cpu"],
-                        "plan_per_step": r["plan_per_step"], "wall": r["wall"]}}
+                        "plan_per_step": r["plan_per_step"], "wall": r["wall"],
+                        **({"switch_step": r["switch_step"]} if r.get("switch_step") is not None else {})}}
 
 
 def make_meta(config: str, config_resolved: dict, argv: list[str]) -> dict:
